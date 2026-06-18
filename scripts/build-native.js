@@ -3,50 +3,69 @@ const fs = require('fs');
 const path = require('path');
 
 const isWin = process.platform === 'win32';
+const ELECTRON_VERSION = '31.7.7';
 
 const srcDir = path.join(__dirname, '..', 'src', 'native', 'rdp-addon');
-const outDir = path.join(__dirname, '..', 'native', 'rdp-addon', 'build', 'Release');
+const addonOutDir = path.join(__dirname, '..', 'native', 'rdp-addon', 'build', 'Release');
 const addonName = 'rdp_addon.node';
 
-// 1. Build with node-gyp (no shell — avoid /bin/sh dependency)
-console.log('Building native addon...');
-
-let nodeGypBin;
+// 1. Find cmake-js
+let cmakeJsBin;
 try {
-  nodeGypBin = require.resolve('node-gyp/bin/node-gyp.js');
+  cmakeJsBin = require.resolve('cmake-js/bin/cmake-js');
 } catch {
-  console.log('node-gyp not found — skipping native addon build');
+  console.log('cmake-js not found — skipping native addon build');
   process.exit(0);
 }
 
-const result = spawnSync(process.execPath, [nodeGypBin, 'rebuild', '--release'], {
+// 2. Build with cmake-js (Electron ABI-aware)
+console.log('Building native addon with cmake-js...');
+console.log(`  Source: ${srcDir}`);
+console.log(`  Target: Electron ${ELECTRON_VERSION}`);
+
+const buildResult = spawnSync(process.execPath, [
+  cmakeJsBin, 'compile',
+  '--runtime=electron',
+  `--runtime-version=${ELECTRON_VERSION}`,
+  '--arch=x64',
+], {
   cwd: srcDir,
   stdio: 'inherit',
   env: { ...process.env },
 });
 
-if (result.error) {
-  console.log(`node-gyp spawn error: ${result.error.message} — skipping native addon build`);
+if (buildResult.error) {
+  console.log(`cmake-js spawn error: ${buildResult.error.message} — skipping`);
   process.exit(0);
 }
-if (result.status !== 0) {
-  console.log(`node-gyp exited with code ${result.status} — skipping native addon build`);
+if (buildResult.status !== 0) {
+  console.log(`cmake-js exited with code ${buildResult.status} — skipping`);
   process.exit(0);
 }
 
-// 2. Copy .node file to native/ directory
-fs.mkdirSync(outDir, { recursive: true });
+// 3. Copy .node file to native/ output directory
+fs.mkdirSync(addonOutDir, { recursive: true });
+
 const builtAddon = path.join(srcDir, 'build', 'Release', addonName);
+const fallbackAddon = path.join(srcDir, 'build', addonName);
+
+let addonSource = null;
 if (fs.existsSync(builtAddon)) {
-  const dest = path.join(outDir, addonName);
-  fs.copyFileSync(builtAddon, dest);
+  addonSource = builtAddon;
+} else if (fs.existsSync(fallbackAddon)) {
+  addonSource = fallbackAddon;
+}
+
+if (addonSource) {
+  const dest = path.join(addonOutDir, addonName);
+  fs.copyFileSync(addonSource, dest);
   console.log(`Copied ${addonName} to ${dest}`);
 } else {
-  console.log(`Build output not found at ${builtAddon} — skipping`);
+  console.log(`Build output not found at ${builtAddon} or ${fallbackAddon} — skipping`);
   process.exit(0);
 }
 
-// 3. On Windows, download FreeRDP DLLs (fast) instead of building from vcpkg (slow)
+// 4. On Windows, download FreeRDP DLLs alongside the .node file
 if (isWin) {
   const dlScript = path.join(__dirname, 'download-freerdp.js');
   if (fs.existsSync(dlScript)) {
