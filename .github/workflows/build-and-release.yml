@@ -77,9 +77,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          vcpkg list
-          dir C:\vcpkg\installed\x64-windows\share -ErrorAction SilentlyContinue
-          dir C:\vcpkg\installed\x64-windows\share\freerdp -ErrorAction SilentlyContinue
+          Write-Host "=== vcpkg list ==="
+          & C:\vcpkg\vcpkg list
+          Write-Host "=== installed share dirs ==="
+          dir C:\vcpkg\installed\x64-windows\share -ErrorAction SilentlyContinue | Select-Object Name
 
       - name: Build desktop artifacts
         env:
