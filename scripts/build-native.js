@@ -23,13 +23,13 @@ console.log('Building native addon with cmake-js...');
 console.log(`  Source: ${srcDir}`);
 console.log(`  Target: Electron ${ELECTRON_VERSION}`);
 
-const cmakeArgs = [];
+// cmake-js ignores --cmake-args for -D flags; set toolchain via env
 const vcpkgRoot = process.env.VCPKG_ROOT || process.env.VCPKG_INSTALLATION_ROOT;
 if (vcpkgRoot) {
   const toolchain = path.join(vcpkgRoot, 'scripts', 'buildsystems', 'vcpkg.cmake');
   if (fs.existsSync(toolchain)) {
-    cmakeArgs.push(`-DCMAKE_TOOLCHAIN_FILE=${toolchain.replace(/\\/g, '/')}`);
-    console.log(`  vcpkg toolchain: ${toolchain}`);
+    process.env.CMAKE_TOOLCHAIN_FILE = toolchain.replace(/\\/g, '/');
+    console.log(`  vcpkg toolchain (env): ${toolchain}`);
   }
 }
 
@@ -39,9 +39,6 @@ const buildArgs = [
   `--runtime-version=${ELECTRON_VERSION}`,
   '--arch=x64',
 ];
-if (cmakeArgs.length > 0) {
-  buildArgs.push('--cmake-args=' + cmakeArgs.join(' '));
-}
 
 const buildResult = spawnSync(process.execPath, buildArgs, {
   cwd: srcDir,

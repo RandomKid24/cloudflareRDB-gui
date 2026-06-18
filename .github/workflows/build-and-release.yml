@@ -69,9 +69,16 @@ jobs:
         run: |
           $vcpkgRoot = "C:\vcpkg"
           echo "VCPKG_INSTALLATION_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
-          & "$vcpkgRoot\vcpkg" install freerdp:x64-windows
+          & "$vcpkgRoot\vcpkg" install freerdp:x64-windows --no-binarycaching
           & "$vcpkgRoot\vcpkg" integrate install
           & "$vcpkgRoot\vcpkg" list
+
+      - name: Debug vcpkg env (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          echo "VCPKG_INSTALLATION_ROOT=$env:VCPKG_INSTALLATION_ROOT"
+          dir C:\vcpkg\installed\x64-windows\share\freerdp -ErrorAction SilentlyContinue
 
       - name: Build desktop artifacts
         env:
