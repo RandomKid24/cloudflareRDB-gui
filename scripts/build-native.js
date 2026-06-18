@@ -4,94 +4,115 @@ const path = require('path');
 
 const isWin = process.platform === 'win32';
 const ELECTRON_VERSION = '31.7.7';
-
 const srcDir = path.join(__dirname, '..', 'src', 'native', 'rdp-addon');
+const buildDir = path.join(srcDir, 'build');
 const addonOutDir = path.join(__dirname, '..', 'native', 'rdp-addon', 'build', 'Release');
 const addonName = 'rdp_addon.node';
 
-// 1. Find cmake-js
+// Get cmake-js include/lib paths by running it in print mode
 let cmakeJsBin;
 try {
   cmakeJsBin = require.resolve('cmake-js/bin/cmake-js');
 } catch {
-  console.log('cmake-js not found — skipping native addon build');
+  console.log('cmake-js not found — skipping');
   process.exit(0);
 }
 
-// 2. Build with cmake-js (Electron ABI-aware)
-console.log('Building native addon with cmake-js...');
-console.log(`  Source: ${srcDir}`);
-console.log(`  Target: Electron ${ELECTRON_VERSION}`);
-
-const buildArgs = [
-  cmakeJsBin, 'compile',
+// Download electron headers via cmake-js first
+console.log('Fetching Electron headers...');
+const fetchResult = spawnSync(process.execPath, [
+  cmakeJsBin, 'install',
   '--runtime=electron',
   `--runtime-version=${ELECTRON_VERSION}`,
   '--arch=x64',
-];
-
-// Pass vcpkg toolchain via --CD (cmake-js's way to inject -D defines)
-const vcpkgRoot = process.env.VCPKG_ROOT || process.env.VCPKG_INSTALLATION_ROOT;
-if (vcpkgRoot) {
-  const toolchain = path.join(vcpkgRoot, 'scripts', 'buildsystems', 'vcpkg.cmake');
-  if (fs.existsSync(toolchain)) {
-    const toolchainFwd = toolchain.replace(/\\/g, '/');
-    buildArgs.push('--CD', `CMAKE_TOOLCHAIN_FILE=${toolchainFwd}`);
-    console.log(`  vcpkg toolchain: ${toolchainFwd}`);
-  }
-}
-
-const buildResult = spawnSync(process.execPath, buildArgs, {
+], {
   cwd: srcDir,
   stdio: 'inherit',
   env: { ...process.env },
 });
 
-if (buildResult.error) {
-  console.log(`cmake-js spawn error: ${buildResult.error.message} — skipping`);
+if (fetchResult.status !== 0) {
+  console.log('Failed to fetch Electron headers — skipping');
   process.exit(0);
 }
+
+const cmakeJsHome = path.join(
+  process.env.HOME || process.env.USERPROFILE,
+  '.cmake-js', 'electron-x64', `v${ELECTRON_VERSION}`
+);
+const nodeInc = path.join(cmakeJsHome, 'include', 'node');
+const nodeLib = path.join(cmakeJsHome, 'x64', 'node.lib');
+const winDelayHook = path.join(__dirname, '..', 'node_modules', 'cmake-js', 'lib', 'cpp', 'win_delay_load_hook.cc');
+
+const vcpkgRoot = process.env.VCPKG_ROOT || process.env.VCPKG_INSTALLATION_ROOT || 'C:\\vcpkg';
+const toolchain = path.join(vcpkgRoot, 'scripts', 'buildsystems', 'vcpkg.cmake').replace(/\\/g, '/');
+
+console.log(`Building native addon...`);
+console.log(`  Source: ${srcDir}`);
+console.log(`  Toolchain: ${toolchain}`);
+
+fs.mkdirSync(buildDir, { recursive: true });
+
+// Configure
+const configArgs = [
+  '-G', 'Visual Studio 18 2026',
+  '-A', 'x64',
+  `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`,
+  `-DCMAKE_BUILD_TYPE=Release`,
+  `-DCMAKE_JS_INC=${nodeInc}`,
+  `-DCMAKE_JS_LIB=${nodeLib}`,
+  `-DCMAKE_JS_SRC=${winDelayHook.replace(/\\/g, '/')}`,
+  `-DNODE_RUNTIME=electron`,
+  `-DNODE_RUNTIMEVERSION=${ELECTRON_VERSION}`,
+  `-DNODE_ARCH=x64`,
+  `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded`,
+  `-DCMAKE_SHARED_LINKER_FLAGS=/DELAYLOAD:NODE.EXE`,
+  srcDir,
+];
+
+const configResult = spawnSync('cmake', configArgs, {
+  cwd: buildDir,
+  stdio: 'inherit',
+  env: { ...process.env },
+});
+
+if (configResult.status !== 0) {
+  console.error('cmake configure failed');
+  process.exit(1);
+}
+
+// Build
+const buildResult = spawnSync('cmake', ['--build', '.', '--config', 'Release'], {
+  cwd: buildDir,
+  stdio: 'inherit',
+  env: { ...process.env },
+});
+
 if (buildResult.status !== 0) {
-  console.log(`cmake-js exited with code ${buildResult.status} — skipping`);
-  process.exit(0);
+  console.error('cmake build failed');
+  process.exit(1);
 }
 
-// 3. Copy .node file to native/ output directory
+// Copy output
 fs.mkdirSync(addonOutDir, { recursive: true });
-
-const builtAddon = path.join(srcDir, 'build', 'Release', addonName);
-const fallbackAddon = path.join(srcDir, 'build', addonName);
-
-let addonSource = null;
+const builtAddon = path.join(buildDir, 'Release', addonName);
 if (fs.existsSync(builtAddon)) {
-  addonSource = builtAddon;
-} else if (fs.existsSync(fallbackAddon)) {
-  addonSource = fallbackAddon;
-}
-
-if (addonSource) {
-  const dest = path.join(addonOutDir, addonName);
-  fs.copyFileSync(addonSource, dest);
-  console.log(`Copied ${addonName} to ${dest}`);
+  fs.copyFileSync(builtAddon, path.join(addonOutDir, addonName));
+  console.log(`Copied ${addonName} to ${addonOutDir}`);
 } else {
-  console.log(`Build output not found at ${builtAddon} or ${fallbackAddon} — skipping`);
-  process.exit(0);
+  console.error(`Build output not found: ${builtAddon}`);
+  process.exit(1);
 }
 
-// 4. On Windows, download FreeRDP DLLs alongside the .node file
+// FreeRDP DLLs
 if (isWin) {
   const dlScript = path.join(__dirname, 'download-freerdp.js');
   if (fs.existsSync(dlScript)) {
-    const dlResult = spawnSync(process.execPath, [dlScript], {
+    spawnSync(process.execPath, [dlScript], {
       stdio: 'inherit',
       env: { ...process.env },
       cwd: path.join(__dirname, '..'),
     });
-    if (dlResult.error || dlResult.status !== 0) {
-      console.log(`FreeRDP download script exited — continuing without DLLs`);
-    }
-  } else {
-    console.log('download-freerdp.js not found — cannot bundle FreeRDP DLLs');
   }
 }
 
