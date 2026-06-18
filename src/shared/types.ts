@@ -29,6 +29,7 @@ export interface TunnelRuntimeState {
   localPort?: number;
   status: TunnelStatus;
   lastError?: string;
+  capturedOutput?: string;
 }
 
 export interface LogEntry {

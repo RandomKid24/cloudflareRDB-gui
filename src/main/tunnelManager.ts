@@ -58,6 +58,7 @@ export class TunnelManager {
   private setStatus(tunnel: ManagedTunnel, status: TunnelStatus, error?: string): void {
     tunnel.state.status = status;
     tunnel.state.lastError = error;
+    tunnel.state.capturedOutput = tunnel.stderrBuffer;
     this.emitStatus(tunnel);
   }
 
@@ -176,12 +177,16 @@ export class TunnelManager {
       const text = data.toString();
       tunnel.stdoutBuffer += text;
       this.parseOutput(tunnel, text);
+      tunnel.state.capturedOutput = tunnel.stderrBuffer;
+      this.emitStatus(tunnel);
     });
 
     proc.stderr?.on('data', (data: Buffer) => {
       const text = data.toString();
       tunnel.stderrBuffer += text;
       this.parseOutput(tunnel, text);
+      tunnel.state.capturedOutput = tunnel.stderrBuffer;
+      this.emitStatus(tunnel);
     });
 
     proc.on('error', (err: NodeJS.ErrnoException) => {
@@ -291,7 +296,10 @@ export class TunnelManager {
       const timeout = setTimeout(() => {
         const capturedStderr = tunnel.stderrBuffer || '(none)';
         writeLog(tunnel.config.id, tunnel.config.name, 'error', `Tunnel connection timed out after 30s.\nCaptured stderr:\n${capturedStderr}`);
-        this.setStatus(tunnel, 'error', 'Connection timed out — check tunnel hostname and network');
+        const errorMsg = tunnel.stderrBuffer
+          ? 'Connection timed out — cloudflared output:\n' + this.humanReadableError(tunnel.stderrBuffer)
+          : 'Connection timed out — check tunnel hostname and network';
+        this.setStatus(tunnel, 'error', errorMsg);
         done(false);
       }, 30000);
 
@@ -346,14 +354,10 @@ export class TunnelManager {
   }
 
   private humanReadableError(text: string): string {
-    const t = text.toLowerCase();
-    if (t.includes('hostname not found') || t.includes('dns')) return 'Hostname not found — check your tunnel address';
-    if (t.includes('certificate') || t.includes('cert')) return 'Certificate error — tunnel security issue';
-    if (t.includes('connection refused') || t.includes('econnrefused')) return 'Connection refused — tunnel endpoint may be down';
-    if (t.includes('timeout') || t.includes('timed out')) return 'Connection timed out — check network and tunnel status';
-    if (t.includes('access denied') || t.includes('unauthorized')) return 'Access denied — check Cloudflare authentication';
-    if (t.includes('enoent') || t.includes('not found')) return 'Binary not found — check cloudflared path in Settings';
-    return text.trim();
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const errorLines = lines.filter(l => /error|fail|refused|denied|timeout|fatal/i.test(l));
+    const relevant = errorLines.length > 0 ? errorLines[0] : lines[lines.length - 1] || text.trim();
+    return relevant.length > 500 ? relevant.substring(0, 500) + '...' : relevant;
   }
 
   private async handleReady(tunnel: ManagedTunnel): Promise<void> {

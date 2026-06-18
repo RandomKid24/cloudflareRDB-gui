@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { TunnelWithState } from '../hooks/useTunnels';
 
 interface Props {
@@ -72,10 +72,14 @@ export function TunnelCard({ tunnel, onConnect, onDisconnect, onEdit, onDelete }
       )}
 
       {runtime.lastError && runtime.status === 'error' && (
-        <div style={{ fontSize: 12, color: 'var(--accent-red)', marginBottom: 8, padding: '4px 8px', background: 'rgba(239,68,68,0.1)', borderRadius: 4 }}>
+        <div style={{ fontSize: 12, color: 'var(--accent-red)', marginBottom: 8, padding: '4px 8px', background: 'rgba(239,68,68,0.1)', borderRadius: 4, whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
           {runtime.lastError}
         </div>
       )}
+
+      {(runtime.status === 'connecting' || runtime.status === 'reconnecting' || (runtime.status === 'error' && runtime.capturedOutput)) && runtime.capturedOutput ? (
+        <LiveOutput capturedOutput={runtime.capturedOutput} />
+      ) : null}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         {isActive ? (
@@ -106,6 +110,37 @@ export function TunnelCard({ tunnel, onConnect, onDisconnect, onEdit, onDelete }
         )}
       </div>
     </div>
+  );
+}
+
+function LiveOutput({ capturedOutput }: { capturedOutput: string }) {
+  const ref = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.scrollTop = ref.current.scrollHeight;
+    }
+  }, [capturedOutput]);
+
+  return (
+    <pre
+      ref={ref}
+      style={{
+        fontSize: 11,
+        lineHeight: 1.4,
+        background: 'rgba(0,0,0,0.06)',
+        borderRadius: 4,
+        padding: 8,
+        maxHeight: 150,
+        overflowY: 'auto',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-all',
+        fontFamily: 'monospace',
+        margin: '8px 0 0',
+        color: 'var(--text-secondary)',
+      }}
+    >
+      {capturedOutput}
+    </pre>
   );
 }
 
