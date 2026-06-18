@@ -5,15 +5,17 @@ directories:
   buildResources: resources
 files:
   - dist/**/*
-  - resources/**/*
+  - resources/icons/**/*
   - package.json
 extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - "cloudflared*"
   - from: native/
     to: native/
     filter:
       - "**/*"
-asarUnpack:
-  - native/**/*.node
 win:
   target:
     - target: nsis

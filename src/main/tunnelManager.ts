@@ -95,13 +95,10 @@ export class TunnelManager {
     try {
       await require('fs/promises').access(bundled);
       return bundled;
-    } catch {}
-
-    const legacyPath = path.join(__dirname, '..', '..', 'resources', binName);
-    try {
-      await require('fs/promises').access(legacyPath);
-      return legacyPath;
-    } catch {}
+    } catch {
+      writeLog('system', 'findCloudflared', 'debug',
+        `cloudflared not found at bundled path: ${bundled}`);
+    }
 
     return null;
   }
