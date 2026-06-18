@@ -51,9 +51,30 @@ console.log(`Building native addon...`);
 console.log(`  Source: ${srcDir}`);
 console.log(`  Toolchain: ${toolchain}`);
 
+// Verify toolchain exists
+if (!fs.existsSync(toolchain)) {
+  console.error(`vcpkg toolchain not found at: ${toolchain}`);
+  process.exit(1);
+}
+console.log(`  Toolchain exists: ${fs.existsSync(toolchain)}`);
+
+// Clear stale build cache
+if (fs.existsSync(buildDir)) {
+  fs.rmSync(buildDir, { recursive: true, force: true });
+}
 fs.mkdirSync(buildDir, { recursive: true });
 
+// Verify cmake is available
+const cmakeCheck = spawnSync('cmake', ['--version'], { encoding: 'utf8' });
+if (cmakeCheck.status !== 0) {
+  console.error('cmake not found on PATH');
+  process.exit(1);
+}
+console.log(`  cmake: ${cmakeCheck.stdout.split('\n')[0]}`);
+
 // Configure
+console.log('Running cmake configure...');
+console.log(`  Args: ${configArgs.join(' ')}`);
 const configArgs = [
   '-G', 'Visual Studio 18 2026',
   '-A', 'x64',
