@@ -40,8 +40,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24.x
           cache: npm
+
+      - name: Print versions
+        run: |
+          node -v
+          npm -v
+          cmake --version || true
 
       - name: Install dependencies
         run: npm ci
@@ -69,18 +75,18 @@ jobs:
         run: |
           $vcpkgRoot = "C:\vcpkg"
           echo "VCPKG_INSTALLATION_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
-          & "$vcpkgRoot\vcpkg" install freerdp:x64-windows --no-binarycaching
+          & "$vcpkgRoot\vcpkg" install freerdp:x64-windows
           & "$vcpkgRoot\vcpkg" integrate install
           & "$vcpkgRoot\vcpkg" list
 
-      - name: Debug vcpkg (Windows)
+      - name: Verify freerdp installed (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Write-Host "=== vcpkg list ==="
-          & C:\vcpkg\vcpkg list
-          Write-Host "=== installed share dirs ==="
-          dir C:\vcpkg\installed\x64-windows\share -ErrorAction SilentlyContinue | Select-Object Name
+          Write-Host "=== freerdp share dir ==="
+          dir C:\vcpkg\installed\x64-windows\share\freerdp -ErrorAction SilentlyContinue | Select-Object Name
+          Write-Host "=== cmake toolchain ==="
+          Test-Path C:\vcpkg\scripts\buildsystems\vcpkg.cmake
 
       - name: Build desktop artifacts
         env:
@@ -89,14 +95,14 @@ jobs:
 
       - name: Verify addon compiled (Windows)
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          if [ -f "native/rdp-addon/build/Release/rdp_addon.node" ]; then
-            echo "✅ rdp_addon.node compiled and packaged"
-          else
-            echo "❌ rdp_addon.node not found in build output"
+          if (Test-Path -Path "native/rdp-addon/build/Release/rdp_addon.node") {
+            Write-Host "rdp_addon.node compiled and packaged"
+          } else {
+            Write-Host "rdp_addon.node not found in build output"
             exit 1
-          fi
+          }
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
