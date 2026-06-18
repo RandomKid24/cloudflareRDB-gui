@@ -46,26 +46,20 @@ if (fs.existsSync(builtAddon)) {
   process.exit(0);
 }
 
-// 3. On Windows, copy FreeRDP DLLs alongside the .node file
+// 3. On Windows, download FreeRDP DLLs (fast) instead of building from vcpkg (slow)
 if (isWin) {
-  const possibleDirs = [
-    path.join(process.env.VCPKG_INSTALLATION_ROOT || 'C:/vcpkg', 'installed', 'x64-windows', 'bin'),
-    path.join(process.env.USERPROFILE || '', 'vcpkg', 'installed', 'x64-windows', 'bin'),
-  ];
-
-  const dlls = ['freerdp2.dll', 'freerdp-client2.dll', 'winpr2.dll', 'winpr-tools2.dll'];
-
-  for (const dir of possibleDirs) {
-    if (!fs.existsSync(dir)) continue;
-    for (const dll of dlls) {
-      const src = path.join(dir, dll);
-      if (fs.existsSync(src)) {
-        const dest = path.join(outDir, dll);
-        fs.copyFileSync(src, dest);
-        console.log(`Copied ${dll} to ${outDir}`);
-      }
+  const dlScript = path.join(__dirname, 'download-freerdp.js');
+  if (fs.existsSync(dlScript)) {
+    const dlResult = spawnSync(process.execPath, [dlScript], {
+      stdio: 'inherit',
+      env: { ...process.env },
+      cwd: path.join(__dirname, '..'),
+    });
+    if (dlResult.error || dlResult.status !== 0) {
+      console.log(`FreeRDP download script exited — continuing without DLLs`);
     }
-    break;
+  } else {
+    console.log('download-freerdp.js not found — cannot bundle FreeRDP DLLs');
   }
 }
 

@@ -143,11 +143,11 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
   });
 
   ipcMain.handle(IPC_CHANNELS.RDP_AVAILABLE, () => {
-    return rdpViewManager?.isAvailable() ?? false;
+    return rdpViewManager?.isAvailable() ?? { available: false, error: 'RDP view manager not initialized' };
   });
 
   ipcMain.handle(IPC_CHANNELS.RDP_VIEW_CONNECT, async (_event, tunnelId: string, width?: number, height?: number) => {
-    if (!rdpViewManager) throw new Error('RDP view not available');
+    if (!rdpViewManager) throw new Error('RDP view manager not initialized');
 
     const tunnels = getTunnels();
     const config = tunnels.find((t) => t.id === tunnelId);
@@ -164,8 +164,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
       throw new Error('Failed to decrypt credentials');
     }
 
-    const ok = await rdpViewManager.connectView(tunnelId, port, config.username, password, width, height);
-    if (!ok) throw new Error('Failed to start RDP view — native decoder may not be available');
+    await rdpViewManager.connectView(tunnelId, port, config.username, password, width, height);
     return true;
   });
 

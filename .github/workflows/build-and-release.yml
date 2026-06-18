@@ -56,12 +56,7 @@ jobs:
 
       - name: Install FreeRDP (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          git clone --depth 1 https://github.com/Microsoft/vcpkg.git $env:VCPKG_INSTALLATION_ROOT
-          & "$env:VCPKG_INSTALLATION_ROOT\bootstrap-vcpkg.bat" -disableMetrics
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg" install freerdp:x64-windows
-          echo "VCPKG_INSTALLATION_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+        run: echo "FreeRDP DLLs will be downloaded during build:native"
 
       - name: Build desktop artifacts
         env:

@@ -69,7 +69,7 @@ const api = {
   },
 
   rdp: {
-    isAvailable: (): Promise<boolean> =>
+    isAvailable: (): Promise<{ available: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.RDP_AVAILABLE),
 
     connect: (tunnelId: string, width?: number, height?: number): Promise<boolean> =>

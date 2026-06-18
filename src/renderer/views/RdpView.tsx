@@ -19,7 +19,17 @@ export function RdpView({ tunnel, onBack }: Props) {
   const active = tunnel?.runtime.status === 'connected';
 
   useEffect(() => {
-    window.cloudflareRdp.rdp.isAvailable().then(setAddonAvailable).catch(() => setAddonAvailable(false));
+    window.cloudflareRdp.rdp.isAvailable()
+      .then((res) => {
+        setAddonAvailable(res.available);
+        if (!res.available) {
+          setError(res.error || 'Native FreeRDP decoder is not available on this system.');
+        }
+      })
+      .catch(() => {
+        setAddonAvailable(false);
+        setError('Failed to check RDP addon availability');
+      });
   }, []);
 
   useEffect(() => {
@@ -30,7 +40,6 @@ export function RdpView({ tunnel, onBack }: Props) {
 
     if (addonAvailable === false) {
       setStatus('error');
-      setError('Embedded RDP view requires the native FreeRDP decoder which is not available on this system.');
       return;
     }
     if (addonAvailable !== true) return;

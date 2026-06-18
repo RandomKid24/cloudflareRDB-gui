@@ -24,6 +24,7 @@ export class RdpViewManager {
   private addon: RdpAddon | null = null;
   private sessions = new Map<string, number>();
   private addonAvailable = false;
+  private addonLoadError = '';
   private win: BrowserWindow | null = null;
   private onEvent: RdpEventCallback | null = null;
 
@@ -34,13 +35,15 @@ export class RdpViewManager {
       this.addonAvailable = true;
       writeLog('rdp', 'RDP View', 'info', `Native RDP addon loaded from ${addonPath}`);
     } catch (err: any) {
-      writeLog('rdp', 'RDP View', 'warn', `Native RDP addon not available: ${err.message}`);
+      this.addonLoadError = `${err.message}\n${err.stack || ''}`;
+      writeLog('rdp', 'RDP View', 'error',
+        `Native RDP addon failed to load from ${path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release', 'rdp_addon.node')}:\n${this.addonLoadError}`);
       this.addonAvailable = false;
     }
   }
 
-  isAvailable(): boolean {
-    return this.addonAvailable;
+  isAvailable(): { available: boolean; error?: string } {
+    return { available: this.addonAvailable, error: this.addonLoadError || undefined };
   }
 
   setWindow(win: BrowserWindow | null) {
@@ -60,8 +63,9 @@ export class RdpViewManager {
     height = DEFAULT_HEIGHT,
   ): Promise<boolean> {
     if (!this.addonAvailable || !this.addon) {
-      writeLog(tunnelId, 'RDP View', 'error', 'Native addon not available');
-      return false;
+      const msg = 'Native RDP addon not available: ' + (this.addonLoadError || 'unknown error');
+      writeLog(tunnelId, 'RDP View', 'error', msg);
+      throw new Error(msg);
     }
 
     if (this.sessions.has(tunnelId)) {
@@ -84,8 +88,9 @@ export class RdpViewManager {
       writeLog(tunnelId, 'RDP View', 'info', `RDP session created (id=${sessionId})`);
       return true;
     } catch (err: any) {
-      writeLog(tunnelId, 'RDP View', 'error', `Failed to create RDP session: ${err.message}`);
-      return false;
+      const msg = `Failed to create RDP session: ${err.message}\n${err.stack || ''}`;
+      writeLog(tunnelId, 'RDP View', 'error', msg);
+      throw new Error(msg);
     }
   }
 
@@ -96,7 +101,7 @@ export class RdpViewManager {
     try {
       this.addon?.destroySession(sessionId);
     } catch (err: any) {
-      writeLog(tunnelId, 'RDP View', 'error', `Error destroying session: ${err.message}`);
+      writeLog(tunnelId, 'RDP View', 'error', `Error destroying session: ${err.message}\n${err.stack || ''}`);
     }
     this.sessions.delete(tunnelId);
     writeLog(tunnelId, 'RDP View', 'info', 'RDP session destroyed');
@@ -129,7 +134,7 @@ export class RdpViewManager {
     try {
       this.addon?.sendPointerEvent(sessionId, flags, x, y);
     } catch (err: any) {
-      writeLog(tunnelId, 'RDP View', 'error', `sendPointerEvent error: ${err.message}`);
+      writeLog(tunnelId, 'RDP View', 'error', `sendPointerEvent error: ${err.message}\n${err.stack || ''}`);
     }
   }
 
@@ -139,7 +144,7 @@ export class RdpViewManager {
     try {
       this.addon?.sendKeyboardEvent(sessionId, flags, code);
     } catch (err: any) {
-      writeLog(tunnelId, 'RDP View', 'error', `sendKeyboardEvent error: ${err.message}`);
+      writeLog(tunnelId, 'RDP View', 'error', `sendKeyboardEvent error: ${err.message}\n${err.stack || ''}`);
     }
   }
 
