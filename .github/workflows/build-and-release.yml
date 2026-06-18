@@ -1,0 +1,120 @@
+name: Build And Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux
+            artifact_name: linux
+            build_command: npm run electron:build:linux -- --publish never
+          - os: windows-latest
+            label: Windows
+            artifact_name: windows
+            build_command: npm run electron:build -- --win nsis --publish never
+          - os: macos-latest
+            label: macOS
+            artifact_name: macos
+            build_command: npm run electron:build -- --mac dmg zip --publish never
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build desktop artifacts
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: ${{ matrix.build_command }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.artifact_name }}
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*-mac.zip
+            release/*.AppImage
+            release/*.deb
+            release/*.snap
+            release/*.7z
+            release/*.blockmap
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+
+      - name: Compute release tag
+        id: meta
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="v${VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            TAG="${TAG}-build.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "title=Server Operator ${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release with all artifacts
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.meta.outputs.title }}
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          files=()
+          for p in dist-artifacts/**/*; do
+            if [[ -f "$p" ]]; then
+              files+=("$p")
+            fi
+          done
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No release files found."
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" "${files[@]}" \
+            --target "${GITHUB_SHA}" \
+            --title "$RELEASE_TITLE" \
+            --notes "Automated release from push to main for commit ${GITHUB_SHA}."

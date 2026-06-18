@@ -1,0 +1,40 @@
+{
+  "name": "cloudflare-rdp",
+  "version": "1.0.0",
+  "description": "One-Click RDP via Cloudflare Tunnel",
+  "author": { "name": "CloudflareRDP", "email": "cloudflarerdp@example.com" },
+  "homepage": "https://github.com/cloudflarerdp/app",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev:renderer": "vite",
+    "dev:main": "tsc -p tsconfig.main.json && electron .",
+    "dev": "concurrently \"npm run dev:renderer\" \"sleep 2 && npm run dev:main\"",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:preload": "tsc -p tsconfig.preload.json",
+    "build": "npm run build:main && npm run build:preload && npm run build:renderer",
+    "electron:build": "npm run build && electron-builder",
+    "electron:build:linux": "npm run build && electron-builder --linux",
+    "pack": "npm run build && electron-builder --win",
+    "pack:dir": "npm run build && electron-builder --win --dir"
+  },
+  "dependencies": {
+    "electron-log": "^5.1.1",
+    "electron-store": "^8.2.0",
+    "tree-kill": "^1.2.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/uuid": "^9.0.8",
+    "@vitejs/plugin-react": "^4.3.0",
+    "concurrently": "^8.2.2",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  }
+}

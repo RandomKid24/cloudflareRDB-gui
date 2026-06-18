@@ -1,0 +1,45 @@
+appId: com.cloudflarerdp.app
+productName: CloudflareRDP
+directories:
+  output: release
+  buildResources: resources
+files:
+  - dist/**/*
+  - resources/**/*
+  - package.json
+extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - "**/*"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icons/icon.png
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: resources/icons/icon.png
+  category: public.app-category.utilities
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  icon: resources/icons/
+  category: Utility
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+publish: null
