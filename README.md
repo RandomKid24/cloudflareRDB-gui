@@ -36,7 +36,7 @@ npm run build && npx electron-builder --linux  # AppImage + deb
 Unsigned macOS builds trigger Gatekeeper. To fix a downloaded `.app`:
 
 ```sh
-xattr -cr /path/to/TunnelGate.app
+xattr -cr /Applications/TunnelGate.app
 ```
 
 Or build without signing by adding this to `electron-builder.yml` under `mac:`:
