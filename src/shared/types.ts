@@ -65,4 +65,22 @@ export const IPC_CHANNELS = {
   APP_GET_VERSION: 'app:get-version',
   DIALOG_SELECT_FILE: 'dialog:select-file',
   CHECK_CLOUDFLARED: 'check:cloudflared',
+  RDP_VIEW_CONNECT: 'rdp:view-connect',
+  RDP_VIEW_DISCONNECT: 'rdp:view-disconnect',
+  RDP_VIEW_FRAME: 'rdp:frame',
+  RDP_VIEW_EVENT: 'rdp:event',
+  RDP_VIEW_MOUSE: 'rdp:view-mouse',
+  RDP_VIEW_KEYBOARD: 'rdp:view-keyboard',
+  RDP_VIEW_STATE: 'rdp:view-state',
+  RDP_AVAILABLE: 'rdp:available',
 } as const;
+
+export type RdpViewStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+export interface RdpViewState {
+  tunnelId: string;
+  status: RdpViewStatus;
+  error?: string;
+  width?: number;
+  height?: number;
+}

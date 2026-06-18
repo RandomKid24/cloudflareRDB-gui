@@ -8,10 +8,12 @@ files:
   - resources/**/*
   - package.json
 extraResources:
-  - from: resources/
-    to: resources/
+  - from: native/
+    to: native/
     filter:
       - "**/*"
+asarUnpack:
+  - native/**/*.node
 win:
   target:
     - target: nsis

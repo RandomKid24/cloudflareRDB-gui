@@ -1,14 +1,15 @@
 import { ipcMain, dialog, app, BrowserWindow } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
-import { IPC_CHANNELS, TunnelConfig, TunnelFormData, AppSettings, LogEntry } from '../shared/types';
+import { IPC_CHANNELS, TunnelConfig, TunnelFormData, AppSettings, LogEntry, RdpViewState } from '../shared/types';
 import { getTunnels, setTunnels, getSettings, setSettings } from './store';
 import { credentialStore } from './credentialStore';
 import { TunnelManager } from './tunnelManager';
+import { RdpViewManager } from './rdpViewManager';
 import { getCombinedLogs, writeLog } from './logger';
 
 const isWin = process.platform === 'win32';
 
-export function registerIpcHandlers(tunnelManager: TunnelManager): void {
+export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager?: RdpViewManager): void {
   ipcMain.handle(IPC_CHANNELS.TUNNELS_LIST, () => {
     return getTunnels();
   });
@@ -139,6 +140,45 @@ export function registerIpcHandlers(tunnelManager: TunnelManager): void {
 
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
+  });
+
+  ipcMain.handle(IPC_CHANNELS.RDP_AVAILABLE, () => {
+    return rdpViewManager?.isAvailable() ?? false;
+  });
+
+  ipcMain.handle(IPC_CHANNELS.RDP_VIEW_CONNECT, async (_event, tunnelId: string, width?: number, height?: number) => {
+    if (!rdpViewManager) throw new Error('RDP view not available');
+
+    const tunnels = getTunnels();
+    const config = tunnels.find((t) => t.id === tunnelId);
+    if (!config) throw new Error('Tunnel not found');
+
+    const tunnelState = tunnelManager.getRuntimeState(tunnelId);
+    const port = tunnelState?.localPort;
+    if (!port) throw new Error('Tunnel not connected — no local port');
+
+    let password: string;
+    try {
+      password = credentialStore.decrypt(config.encryptedPassword);
+    } catch {
+      throw new Error('Failed to decrypt credentials');
+    }
+
+    const ok = await rdpViewManager.connectView(tunnelId, port, config.username, password, width, height);
+    if (!ok) throw new Error('Failed to start RDP view — native decoder may not be available');
+    return true;
+  });
+
+  ipcMain.handle(IPC_CHANNELS.RDP_VIEW_DISCONNECT, (_event, tunnelId: string) => {
+    rdpViewManager?.disconnectView(tunnelId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.RDP_VIEW_MOUSE, (_event, tunnelId: string, flags: number, x: number, y: number) => {
+    rdpViewManager?.sendPointerEvent(tunnelId, flags, x, y);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.RDP_VIEW_KEYBOARD, (_event, tunnelId: string, flags: number, code: number) => {
+    rdpViewManager?.sendKeyboardEvent(tunnelId, flags, code);
   });
 
   ipcMain.handle(IPC_CHANNELS.CHECK_CLOUDFLARED, async () => {

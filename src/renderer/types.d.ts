@@ -24,6 +24,15 @@ declare global {
         selectFile: () => Promise<string | null>;
         checkCloudflared: () => Promise<{ found: boolean; path: string | null }>;
       };
+      rdp: {
+        isAvailable: () => Promise<boolean>;
+        connect: (tunnelId: string, width?: number, height?: number) => Promise<boolean>;
+        disconnect: (tunnelId: string) => Promise<void>;
+        sendMouse: (tunnelId: string, flags: number, x: number, y: number) => void;
+        sendKeyboard: (tunnelId: string, flags: number, code: number) => void;
+        onFrame: (callback: (tunnelId: string, rect: { x: number; y: number; w: number; h: number }, buf: ArrayBuffer) => void) => () => void;
+        onEvent: (callback: (tunnelId: string, type: string, ...args: any[]) => void) => () => void;
+      };
     };
   }
 }

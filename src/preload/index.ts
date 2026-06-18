@@ -67,6 +67,37 @@ const api = {
     checkCloudflared: (): Promise<{ found: boolean; path: string | null }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHECK_CLOUDFLARED),
   },
+
+  rdp: {
+    isAvailable: (): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.RDP_AVAILABLE),
+
+    connect: (tunnelId: string, width?: number, height?: number): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.RDP_VIEW_CONNECT, tunnelId, width, height),
+
+    disconnect: (tunnelId: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.RDP_VIEW_DISCONNECT, tunnelId),
+
+    sendMouse: (tunnelId: string, flags: number, x: number, y: number): void => {
+      ipcRenderer.invoke(IPC_CHANNELS.RDP_VIEW_MOUSE, tunnelId, flags, x, y);
+    },
+
+    sendKeyboard: (tunnelId: string, flags: number, code: number): void => {
+      ipcRenderer.invoke(IPC_CHANNELS.RDP_VIEW_KEYBOARD, tunnelId, flags, code);
+    },
+
+    onFrame: (callback: (tunnelId: string, rect: { x: number; y: number; w: number; h: number }, buf: ArrayBuffer) => void) => {
+      const handler = (_event: any, tunnelId: string, rect: any, buf: ArrayBuffer) => callback(tunnelId, rect, buf);
+      ipcRenderer.on(IPC_CHANNELS.RDP_VIEW_FRAME, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.RDP_VIEW_FRAME, handler); };
+    },
+
+    onEvent: (callback: (tunnelId: string, type: string, ...args: any[]) => void) => {
+      const handler = (_event: any, tunnelId: string, type: string, ...args: any[]) => callback(tunnelId, type, ...args);
+      ipcRenderer.on(IPC_CHANNELS.RDP_VIEW_EVENT, handler);
+      return () => { ipcRenderer.removeListener(IPC_CHANNELS.RDP_VIEW_EVENT, handler); };
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld('cloudflareRdp', api);

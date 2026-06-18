@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { Tunnels } from './views/Tunnels';
 import { Logs } from './views/Logs';
 import { Settings } from './views/Settings';
-import { useTunnels } from './hooks/useTunnels';
+import { RdpView } from './views/RdpView';
+import { useTunnels, TunnelWithState } from './hooks/useTunnels';
 
 type Tab = 'tunnels' | 'logs' | 'settings';
 
 function App() {
   const [tab, setTab] = useState<Tab>('tunnels');
+  const [viewingTunnel, setViewingTunnel] = useState<TunnelWithState | null>(null);
   const { tunnels, loading, add, update, remove, connect, disconnect } = useTunnels();
 
   const navItems: { id: Tab; label: string }[] = [
@@ -15,6 +17,14 @@ function App() {
     { id: 'logs', label: 'Logs' },
     { id: 'settings', label: 'Settings' },
   ];
+
+  if (viewingTunnel) {
+    return (
+      <div style={{ height: '100vh', background: '#000' }}>
+        <RdpView tunnel={viewingTunnel} onBack={() => setViewingTunnel(null)} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-primary)' }}>
@@ -64,6 +74,7 @@ function App() {
             onDelete={remove}
             onConnect={connect}
             onDisconnect={disconnect}
+            onViewScreen={setViewingTunnel}
           />
         )}
         {tab === 'logs' && <Logs tunnels={tunnels} />}

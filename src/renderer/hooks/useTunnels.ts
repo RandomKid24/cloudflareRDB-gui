@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TunnelConfig, TunnelRuntimeState, TunnelStatus } from '../../shared/types';
 
-interface TunnelWithState extends TunnelConfig {
+export interface TunnelWithState extends TunnelConfig {
   runtime: TunnelRuntimeState;
 }
 

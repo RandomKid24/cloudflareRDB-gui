@@ -1,5 +1,6 @@
 import { ChildProcess, spawn } from 'child_process';
 import { createServer } from 'net';
+import path from 'path';
 import treeKill from 'tree-kill';
 import { TunnelConfig, TunnelRuntimeState, TunnelStatus } from '../shared/types';
 import { writeLog } from './logger';
@@ -90,10 +91,16 @@ export class TunnelManager {
       } catch {}
     }
 
-    const bundled = __dirname + '/../../resources/' + binName;
+    const bundled = path.join(process.resourcesPath, binName);
     try {
       await require('fs/promises').access(bundled);
       return bundled;
+    } catch {}
+
+    const legacyPath = path.join(__dirname, '..', '..', 'resources', binName);
+    try {
+      await require('fs/promises').access(legacyPath);
+      return legacyPath;
     } catch {}
 
     return null;

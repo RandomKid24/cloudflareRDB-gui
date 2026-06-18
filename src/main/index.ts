@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, screen } from 'electron';
 import path from 'path';
 import { TunnelManager } from './tunnelManager';
+import { RdpViewManager } from './rdpViewManager';
 import { registerIpcHandlers, sendStatusToRenderer, sendLogToRenderer } from './ipcHandlers';
 import { writeLog } from './logger';
 import { getSettings, getTunnels, store } from './store';
@@ -8,6 +9,7 @@ import { getSettings, getTunnels, store } from './store';
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let tunnelManager: TunnelManager | null = null;
+let rdpViewManager: RdpViewManager | null = null;
 let isQuitting = false;
 
 const PREVENT_WINDOW_CLOSE = true;
@@ -112,9 +114,12 @@ function createTray(): void {
     }
   );
 
+  rdpViewManager = new RdpViewManager();
+  rdpViewManager.setWindow(mainWindow);
+
   tray.on('click', showMainWindow);
 
-  registerIpcHandlers(tunnelManager);
+  registerIpcHandlers(tunnelManager, rdpViewManager);
   updateTrayMenu();
 
   setInterval(updateTrayMenu, 2000);
@@ -155,6 +160,7 @@ function createMainWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    rdpViewManager?.setWindow(null);
   });
 }
 
@@ -185,6 +191,7 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   isQuitting = true;
   tunnelManager?.disconnectAll();
+  rdpViewManager?.disconnectAll();
 });
 
 app.on('window-all-closed', () => {
@@ -196,4 +203,5 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   tunnelManager?.disconnectAll();
+  rdpViewManager?.disconnectAll();
 });

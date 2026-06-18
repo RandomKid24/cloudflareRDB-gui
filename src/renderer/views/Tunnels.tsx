@@ -6,14 +6,15 @@ import { TunnelWithState } from '../hooks/useTunnels';
 interface Props {
   tunnels: TunnelWithState[];
   loading: boolean;
-  onAdd: (data: { name: string; hostname: string; username: string; password: string; rememberAfterSession: boolean }) => void;
+  onAdd: (data: { name: string; hostname: string; port: number; username: string; password: string; rememberAfterSession: boolean }) => void;
   onUpdate: (tunnel: any) => void;
   onDelete: (id: string) => void;
   onConnect: (id: string) => void;
   onDisconnect: (id: string) => void;
+  onViewScreen: (tunnel: TunnelWithState) => void;
 }
 
-export function Tunnels({ tunnels, loading, onAdd, onUpdate, onDelete, onConnect, onDisconnect }: Props) {
+export function Tunnels({ tunnels, loading, onAdd, onUpdate, onDelete, onConnect, onDisconnect, onViewScreen }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [editingTunnel, setEditingTunnel] = useState<TunnelWithState | null>(null);
 
@@ -51,7 +52,7 @@ export function Tunnels({ tunnels, loading, onAdd, onUpdate, onDelete, onConnect
     );
   }
 
-  const handleFormSubmit = (data: { name: string; hostname: string; username: string; password: string; rememberAfterSession: boolean }) => {
+  const handleFormSubmit = (data: { name: string; hostname: string; port: number; username: string; password: string; rememberAfterSession: boolean }) => {
     if (editingTunnel) {
       onUpdate({ ...editingTunnel, ...data });
     } else {
@@ -108,6 +109,7 @@ export function Tunnels({ tunnels, loading, onAdd, onUpdate, onDelete, onConnect
             onDisconnect={onDisconnect}
             onEdit={handleEdit}
             onDelete={onDelete}
+            onViewScreen={() => onViewScreen(tunnel)}
           />
         ))}
       </div>

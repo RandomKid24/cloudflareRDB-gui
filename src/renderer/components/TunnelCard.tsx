@@ -7,6 +7,7 @@ interface Props {
   onDisconnect: (id: string) => void;
   onEdit: (tunnel: TunnelWithState) => void;
   onDelete: (id: string) => void;
+  onViewScreen?: () => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -25,7 +26,7 @@ const statusLabels: Record<string, string> = {
   reconnecting: 'Reconnecting...',
 };
 
-export function TunnelCard({ tunnel, onConnect, onDisconnect, onEdit, onDelete }: Props) {
+export function TunnelCard({ tunnel, onConnect, onDisconnect, onEdit, onDelete, onViewScreen }: Props) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { runtime } = tunnel;
   const isActive = runtime.status === 'connected' || runtime.status === 'connecting' || runtime.status === 'reconnecting';
@@ -83,9 +84,16 @@ export function TunnelCard({ tunnel, onConnect, onDisconnect, onEdit, onDelete }
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         {isActive ? (
-          <ActionButton onClick={() => onDisconnect(tunnel.id)} color="var(--accent-red)">
-            Disconnect
-          </ActionButton>
+          <>
+            <ActionButton onClick={() => onDisconnect(tunnel.id)} color="var(--accent-red)">
+              Disconnect
+            </ActionButton>
+            {onViewScreen && runtime.status === 'connected' && (
+              <ActionButton onClick={onViewScreen} color="var(--accent-blue)">
+                View Screen
+              </ActionButton>
+            )}
+          </>
         ) : (
           <ActionButton onClick={() => onConnect(tunnel.id)} color="var(--accent-green)">
             Connect
