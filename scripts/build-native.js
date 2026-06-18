@@ -10,7 +10,7 @@ const addonName = 'rdp_addon.node';
 
 // 1. Build with node-gyp
 console.log('Building native addon...');
-execSync('node-gyp rebuild --release', { cwd: srcDir, stdio: 'inherit' });
+execSync('npx node-gyp rebuild --release', { cwd: srcDir, stdio: 'inherit' });
 
 // 2. Copy .node file to native/ directory
 fs.mkdirSync(outDir, { recursive: true });

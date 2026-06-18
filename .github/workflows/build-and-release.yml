@@ -51,7 +51,7 @@ jobs:
 
       - name: Install FreeRDP (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libfreerdp-dev freerdp2-dev
+        run: sudo apt-get update && sudo apt-get install -y freerdp2-dev
 
       - name: Install FreeRDP (macOS)
         if: runner.os == 'macOS'
