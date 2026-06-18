@@ -3,13 +3,14 @@ import { TunnelConfig } from '../../shared/types';
 
 interface Props {
   tunnel?: TunnelConfig;
-  onSubmit: (data: { name: string; hostname: string; username: string; password: string; rememberAfterSession: boolean }) => void;
+  onSubmit: (data: { name: string; hostname: string; port: number; username: string; password: string; rememberAfterSession: boolean }) => void;
   onCancel: () => void;
 }
 
 export function TunnelForm({ tunnel, onSubmit, onCancel }: Props) {
   const [name, setName] = useState(tunnel?.name ?? '');
   const [hostname, setHostname] = useState(tunnel?.hostname ?? '');
+  const [port, setPort] = useState(tunnel?.port ?? 3389);
   const [username, setUsername] = useState(tunnel?.username ?? '');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(tunnel?.rememberAfterSession ?? true);
@@ -21,6 +22,8 @@ export function TunnelForm({ tunnel, onSubmit, onCancel }: Props) {
 
     if (!name.trim()) { setError('Display name is required'); return; }
     if (!hostname.trim()) { setError('Hostname is required'); return; }
+    const portNum = Number(port);
+    if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) { setError('Port must be a number between 1 and 65535'); return; }
     if (!username.trim()) { setError('Username is required'); return; }
     if (!tunnel && !password.trim()) { setError('Password is required'); return; }
 
@@ -33,6 +36,7 @@ export function TunnelForm({ tunnel, onSubmit, onCancel }: Props) {
     onSubmit({
       name: name.trim(),
       hostname: hostname.trim(),
+      port: portNum,
       username: username.trim(),
       password,
       rememberAfterSession: remember,
@@ -62,6 +66,18 @@ export function TunnelForm({ tunnel, onSubmit, onCancel }: Props) {
           onChange={(e) => setHostname(e.target.value)}
           placeholder="rdp-tunnel.example.com"
           style={{ ...inputStyle, fontFamily: 'monospace' }}
+        />
+      </Field>
+
+      <Field label="Local RDP Port">
+        <input
+          type="number"
+          value={port}
+          onChange={(e) => setPort(parseInt(e.target.value) || 3389)}
+          placeholder="3389"
+          min={1}
+          max={65535}
+          style={{ ...inputStyle, width: 120 }}
         />
       </Field>
 

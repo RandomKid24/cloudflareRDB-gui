@@ -26,6 +26,7 @@ export const store = new Store<Schema>({
           id: { type: 'string' },
           name: { type: 'string' },
           hostname: { type: 'string' },
+          port: { type: 'number', default: 3389 },
           username: { type: 'string' },
           encryptedPassword: { type: 'string' },
           rememberAfterSession: { type: 'boolean' },

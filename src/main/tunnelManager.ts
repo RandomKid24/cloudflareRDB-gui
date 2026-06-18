@@ -135,7 +135,11 @@ export class TunnelManager {
 
   private async startProcess(tunnel: ManagedTunnel): Promise<void> {
     const config = tunnel.config;
-    const port = await findFreePort(3389);
+    const preferred = config.port || 3389;
+    const port = await findFreePort(preferred);
+    if (port !== preferred) {
+      writeLog(config.id, config.name, 'warn', `Port ${preferred} was in use, falling back to ${port}`);
+    }
     tunnel.state.localPort = port;
     writeLog(config.id, config.name, 'info', `Selected local port: ${port}`);
 

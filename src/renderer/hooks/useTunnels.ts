@@ -56,6 +56,7 @@ export function useTunnels() {
   const add = useCallback(async (data: {
     name: string;
     hostname: string;
+    port: number;
     username: string;
     password: string;
     rememberAfterSession: boolean;

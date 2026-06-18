@@ -29,6 +29,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager): void {
       id: uuidv4(),
       name: data.name,
       hostname: data.hostname,
+      port: data.port || 3389,
       username: data.username,
       encryptedPassword,
       rememberAfterSession: data.rememberAfterSession,

@@ -1,7 +1,10 @@
+export const DEFAULT_RDP_PORT = 3389;
+
 export interface TunnelConfig {
   id: string;
   name: string;
   hostname: string;
+  port: number;
   username: string;
   encryptedPassword: string;
   rememberAfterSession: boolean;
@@ -12,6 +15,7 @@ export interface TunnelConfig {
 export interface TunnelFormData {
   name: string;
   hostname: string;
+  port: number;
   username: string;
   password: string;
   rememberAfterSession: boolean;
