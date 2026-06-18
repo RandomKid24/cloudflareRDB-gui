@@ -60,14 +60,11 @@ async function downloadAndExtract(tag) {
   const zipPath = path.join(tmpDir, 'freerdp.zip');
   fs.writeFileSync(zipPath, zipData);
 
-  const result = spawnSync('unzip', ['-o', zipPath, '-d', tmpDir], { stdio: 'inherit' });
-  if (result.status !== 0) {
-    console.log('unzip failed — trying to use tar or 7z...');
-    const result2 = spawnSync('tar', ['-xf', zipPath, '-C', tmpDir], { stdio: 'inherit' });
-    if (result2.status !== 0) {
-      console.log('Failed to extract zip — will skip DLL bundling');
-      return false;
-    }
+  // Cross-platform zip extraction
+  const extracted = extractZip(zipPath, tmpDir);
+  if (!extracted) {
+    console.log('Failed to extract zip — will skip DLL bundling');
+    return false;
   }
 
   // Find and copy DLLs
@@ -115,6 +112,29 @@ async function downloadAndExtract(tag) {
 
   console.log(`Downloaded and extracted ${found} FreeRDP DLLs`);
   return true;
+}
+
+function extractZip(zipPath, destDir) {
+  // Try platform-specific extractors
+  if (process.platform === 'win32') {
+    // Windows: try 7z, tar, or PowerShell Expand-Archive
+    const sevenZip = 'C:\\Program Files\\7-Zip\\7z.exe';
+    if (fs.existsSync(sevenZip)) {
+      const r = spawnSync(sevenZip, ['x', zipPath, '-o' + destDir, '-y'], { stdio: 'inherit' });
+      if (r.status === 0) return true;
+    }
+    // PowerShell Expand-Archive
+    const psCmd = `Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force`;
+    const r = spawnSync('powershell', ['-NoProfile', '-Command', psCmd], { stdio: 'inherit' });
+    if (r.status === 0) return true;
+  } else {
+    // macOS/Linux: try unzip, then tar
+    const r1 = spawnSync('unzip', ['-o', zipPath, '-d', destDir], { stdio: 'inherit' });
+    if (r1.status === 0) return true;
+    const r2 = spawnSync('tar', ['-xf', zipPath, '-C', destDir], { stdio: 'inherit' });
+    if (r2.status === 0) return true;
+  }
+  return false;
 }
 
 async function main() {

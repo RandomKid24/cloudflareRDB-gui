@@ -8,19 +8,46 @@
       ],
       "include_dirs": [
         "<!(node -e \"require('node-addon-api').include\")",
-        "<!@(node -p \"if (process.platform === 'win32') { const { execSync } = require('child_process'); try { const p = execSync('where freerdp.h 2>nul').toString().trim().replace('freerdp.h', '').replace(/\\\\/g, '\\\\\\\\'); console.log(p); } catch { console.log(''); } } else { const { execSync } = require('child_process'); try { console.log(execSync('pkg-config --cflags freerdp2 2>/dev/null || echo').toString().trim().replace(/-I/g, '').split(/\\s+/).join('\\\\n')); } catch { console.log(''); } }\")"
+        "<!@(node -p \"
+          const p = process.platform;
+          if (p === 'win32') {
+            const root = (process.env.VCPKG_INSTALLATION_ROOT || 'C:\\\\\\\\vcpkg').replace(/\\\\\\\\+$/,'');
+            const inc = root + '\\\\\\\\installed\\\\\\\\x64-windows\\\\\\\\include\\\\\\\\freerdp2';
+            console.log(inc);
+          } else {
+            const {execSync} = require('child_process');
+            try {
+              const r = execSync('pkg-config --cflags freerdp2').toString().trim();
+              console.log(r.replace(/-I/g,'').split(/\\\\s+/).join('\\\\n'));
+            } catch {
+              console.log('');
+            }
+          }
+        \")"
       ],
       "libraries": [
-        "<!@(node -p \"if (process.platform === 'win32') { 'freerdp-client2.lib freerdp2.lib winpr2.lib'.split(' ').join('\\\\n') } else { const { execSync } = require('child_process'); try { console.log(execSync('pkg-config --libs freerdp2 freerdp-client2 2>/dev/null || echo \\\"-lfreerdp-client2 -lfreerdp2 -lwinpr2\\\"').toString().trim().split(/\\s+/).join('\\\\n')); } catch { console.log('-lfreerdp-client2 -lfreerdp2 -lwinpr2'.split(' ').join('\\\\n')); } }\")"
+        "<!@(node -p \"
+          const p = process.platform;
+          if (p === 'win32') {
+            const root = (process.env.VCPKG_INSTALLATION_ROOT || 'C:\\\\\\\\vcpkg').replace(/\\\\\\\\+$/,'');
+            const libDir = root + '\\\\\\\\installed\\\\\\\\x64-windows\\\\\\\\lib';
+            console.log(libDir + '\\\\\\\\freerdp-client2.lib');
+            console.log(libDir + '\\\\\\\\freerdp2.lib');
+            console.log(libDir + '\\\\\\\\winpr2.lib');
+          } else {
+            const {execSync} = require('child_process');
+            try {
+              const r = execSync('pkg-config --libs freerdp2 freerdp-client2').toString().trim();
+              console.log(r.split(/\\\\s+/).join('\\\\n'));
+            } catch {
+              console.log('-lfreerdp-client2');
+              console.log('-lfreerdp2');
+              console.log('-lwinpr2');
+            }
+          }
+        \")"
       ],
       "conditions": [
-        ["OS=='win'", {
-          "libraries": [
-            "freerdp-client2.lib",
-            "freerdp2.lib",
-            "winpr2.lib"
-          ]
-        }],
         ["OS=='mac'", {
           "xcode_settings": {
             "OTHER_CFLAGS": ["-std=c++17"],
