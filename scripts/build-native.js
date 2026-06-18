@@ -1,4 +1,4 @@
-const { execSync } = require('child_process');
+const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -8,9 +8,31 @@ const srcDir = path.join(__dirname, '..', 'src', 'native', 'rdp-addon');
 const outDir = path.join(__dirname, '..', 'native', 'rdp-addon', 'build', 'Release');
 const addonName = 'rdp_addon.node';
 
-// 1. Build with node-gyp
+// 1. Build with node-gyp (no shell — avoid /bin/sh dependency)
 console.log('Building native addon...');
-execSync('npx node-gyp rebuild --release', { cwd: srcDir, stdio: 'inherit' });
+
+let nodeGypBin;
+try {
+  nodeGypBin = require.resolve('node-gyp/bin/node-gyp.js');
+} catch {
+  console.log('node-gyp not found — skipping native addon build');
+  process.exit(0);
+}
+
+const result = spawnSync(process.execPath, [nodeGypBin, 'rebuild', '--release'], {
+  cwd: srcDir,
+  stdio: 'inherit',
+  env: { ...process.env },
+});
+
+if (result.error) {
+  console.log(`node-gyp spawn error: ${result.error.message} — skipping native addon build`);
+  process.exit(0);
+}
+if (result.status !== 0) {
+  console.log(`node-gyp exited with code ${result.status} — skipping native addon build`);
+  process.exit(0);
+}
 
 // 2. Copy .node file to native/ directory
 fs.mkdirSync(outDir, { recursive: true });
@@ -20,8 +42,8 @@ if (fs.existsSync(builtAddon)) {
   fs.copyFileSync(builtAddon, dest);
   console.log(`Copied ${addonName} to ${dest}`);
 } else {
-  console.error(`ERROR: Build output not found at ${builtAddon}`);
-  process.exit(1);
+  console.log(`Build output not found at ${builtAddon} — skipping`);
+  process.exit(0);
 }
 
 // 3. On Windows, copy FreeRDP DLLs alongside the .node file

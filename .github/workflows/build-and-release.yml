@@ -46,9 +46,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install native build tools
-        run: npm install -g node-gyp
-
       - name: Install FreeRDP (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y freerdp2-dev
