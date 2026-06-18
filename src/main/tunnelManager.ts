@@ -346,7 +346,7 @@ export class TunnelManager {
   }
 
   private isReadyMessage(text: string): boolean {
-    return /ready|listening|connection registered|Started serving/i.test(text);
+    return /ready|listening|connection registered|Started serving|Start Websocket listener/i.test(text);
   }
 
   private isErrorMessage(text: string): boolean {
@@ -355,9 +355,12 @@ export class TunnelManager {
 
   private humanReadableError(text: string): string {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    const errorLines = lines.filter(l => /error|fail|refused|denied|timeout|fatal/i.test(l));
-    const relevant = errorLines.length > 0 ? errorLines[0] : lines[lines.length - 1] || text.trim();
-    return relevant.length > 500 ? relevant.substring(0, 500) + '...' : relevant;
+    const errorLines = lines.filter(l => /ERR\s|error|fail|refused|denied|timeout|fatal|could not|unable to/i.test(l));
+    if (errorLines.length > 0) {
+      const relevant = errorLines[0];
+      return relevant.length > 500 ? relevant.substring(0, 500) + '...' : relevant;
+    }
+    return text.trim().substring(0, 500);
   }
 
   private async handleReady(tunnel: ManagedTunnel): Promise<void> {

@@ -43,13 +43,25 @@ export function registerIpcHandlers(tunnelManager: TunnelManager): void {
     return tunnel;
   });
 
-  ipcMain.handle(IPC_CHANNELS.TUNNELS_UPDATE, async (_event, tunnel: TunnelConfig) => {
+  ipcMain.handle(IPC_CHANNELS.TUNNELS_UPDATE, async (_event, data: TunnelConfig & { password?: string }) => {
     const tunnels = getTunnels();
-    const index = tunnels.findIndex((t) => t.id === tunnel.id);
+    const index = tunnels.findIndex((t) => t.id === data.id);
     if (index === -1) throw new Error('Tunnel not found');
-    tunnels[index] = tunnel;
+
+    const existing = tunnels[index];
+    const updated = { ...existing, ...data };
+
+    if (data.password) {
+      updated.encryptedPassword = credentialStore.encrypt(data.password);
+    } else {
+      updated.encryptedPassword = existing.encryptedPassword;
+    }
+
+    delete (updated as any).password;
+
+    tunnels[index] = updated;
     setTunnels(tunnels);
-    return tunnel;
+    return updated;
   });
 
   ipcMain.handle(IPC_CHANNELS.TUNNELS_DELETE, async (_event, tunnelId: string) => {
