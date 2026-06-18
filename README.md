@@ -31,6 +31,28 @@ npm run build && npx electron-builder --win    # NSIS exe
 npm run build && npx electron-builder --linux  # AppImage + deb
 ```
 
+### macOS: "App is damaged" fix
+
+Unsigned macOS builds trigger Gatekeeper. To fix a downloaded `.app`:
+
+```sh
+xattr -cr /path/to/TunnelGate.app
+```
+
+Or build without signing by adding this to `electron-builder.yml` under `mac:`:
+
+```yaml
+mac:
+  identity: null
+  hardenedRuntime: false
+```
+
+Then rebuild:
+
+```sh
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run build && npx electron-builder --mac
+```
+
 ## How it works
 
 1. User adds a tunnel target (hostname, username, encrypted password)
