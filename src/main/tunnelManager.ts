@@ -10,7 +10,7 @@ const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 
 function findFreePort(preferred: number): Promise<number> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const server = createServer();
     server.listen(preferred, '127.0.0.1', () => {
       const port = (server.address() as any).port;
@@ -33,6 +33,9 @@ interface ManagedTunnel {
   reconnectAttempts: number;
   disconnectRequested: boolean;
   password?: string;
+  spawnFailed: boolean;
+  stderrBuffer: string;
+  stdoutBuffer: string;
 }
 
 type StatusCallback = (state: TunnelRuntimeState) => void;
@@ -58,14 +61,14 @@ export class TunnelManager {
     this.emitStatus(tunnel);
   }
 
-  private async findCloudflared(): Promise<string> {
+  private async findCloudflared(): Promise<string | null> {
     const settings = getSettings();
     if (settings.cloudflaredPath) {
       return settings.cloudflaredPath;
     }
 
     const binName = getCloudflaredName();
-    const commonPaths = [binName];
+    const commonPaths: string[] = [binName];
 
     if (isWin) {
       commonPaths.push(
@@ -92,7 +95,7 @@ export class TunnelManager {
       return bundled;
     } catch {}
 
-    return binName;
+    return null;
   }
 
   async connect(config: TunnelConfig, password: string): Promise<void> {
@@ -114,11 +117,13 @@ export class TunnelManager {
       reconnectAttempts: 0,
       disconnectRequested: false,
       password,
+      spawnFailed: false,
+      stderrBuffer: '',
+      stdoutBuffer: '',
     };
 
     this.registry.set(config.id, tunnel);
     this.setStatus(tunnel, 'connecting');
-    writeLog(config.id, config.name, 'info', 'Starting tunnel connection...');
 
     try {
       await this.startProcess(tunnel);
@@ -135,15 +140,24 @@ export class TunnelManager {
     writeLog(config.id, config.name, 'info', `Selected local port: ${port}`);
 
     const cloudflaredPath = await this.findCloudflared();
-    writeLog(config.id, config.name, 'debug', `Using cloudflared: ${cloudflaredPath}`);
+    writeLog(config.id, config.name, 'debug', `Resolved cloudflared path: ${cloudflaredPath ?? '(null)'}`);
+
+    if (!cloudflaredPath) {
+      const binName = getCloudflaredName();
+      const msg = `cloudflared binary not found — checked PATH, common install dirs, and resources/${binName}. Use Settings to set the path manually.`;
+      writeLog(config.id, config.name, 'error', msg);
+      this.setStatus(tunnel, 'error', msg);
+      return;
+    }
 
     const args = [
       'access', 'tcp',
       '--hostname', config.hostname,
       '--url', `localhost:${port}`,
+      '--loglevel', 'debug',
     ];
 
-    writeLog(config.id, config.name, 'debug', `Executing: ${cloudflaredPath} ${args.join(' ')}`);
+    writeLog(config.id, config.name, 'debug', `Spawning: ${JSON.stringify(cloudflaredPath)} with argv: ${JSON.stringify(args)}`);
 
     const proc = spawn(cloudflaredPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -152,37 +166,76 @@ export class TunnelManager {
 
     tunnel.proc = proc;
     tunnel.state.pid = proc.pid;
-
-    let outputBuffer = '';
+    writeLog(config.id, config.name, 'debug', `child_process.pid = ${proc.pid}`);
 
     proc.stdout?.on('data', (data: Buffer) => {
       const text = data.toString();
-      outputBuffer += text;
+      tunnel.stdoutBuffer += text;
       this.parseOutput(tunnel, text);
     });
 
     proc.stderr?.on('data', (data: Buffer) => {
       const text = data.toString();
-      outputBuffer += text;
+      tunnel.stderrBuffer += text;
       this.parseOutput(tunnel, text);
     });
 
-    proc.on('close', (code) => {
-      writeLog(config.id, config.name, 'info', `Process exited with code ${code}`);
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      tunnel.spawnFailed = true;
+      const summary = [
+        `child_process 'error' event — code=${err.code}, errno=${err.errno}, syscall=${err.syscall}`,
+        `message: ${err.message}`,
+        `resolved binary path: ${cloudflaredPath}`,
+      ].join(' | ');
+      writeLog(config.id, config.name, 'error', summary);
+      this.setStatus(tunnel, 'error', `Failed to launch cloudflared: ${err.message} (${err.code})`);
+
       if (!tunnel.disconnectRequested) {
-        this.handleUnexpectedDisconnect(tunnel);
+        this.registry.delete(config.id);
+      }
+    });
+
+    proc.on('close', (code, signal) => {
+      writeLog(config.id, config.name, 'debug',
+        `child_process 'close' event — code=${code}, signal=${signal}`
+      );
+
+      if (tunnel.spawnFailed) {
+        writeLog(config.id, config.name, 'debug', 'Spawn already failed — ignoring close event');
+        return;
+      }
+
+      const capturedStderr = tunnel.stderrBuffer ? `stderr:\n${tunnel.stderrBuffer}` : '(no stderr captured)';
+      const capturedStdout = tunnel.stdoutBuffer ? `stdout:\n${tunnel.stdoutBuffer}` : '(no stdout captured)';
+
+      if (code !== 0) {
+        writeLog(config.id, config.name, 'error',
+          `Process exited with code=${code}, signal=${signal}\n${capturedStderr}\n${capturedStdout}`
+        );
+      } else {
+        writeLog(config.id, config.name, 'info',
+          `Process exited cleanly (code=${code})\n${capturedStderr}\n${capturedStdout}`
+        );
+      }
+
+      if (!tunnel.disconnectRequested) {
+        this.handleUnexpectedDisconnect(tunnel, code, signal, capturedStderr);
       } else {
         this.setStatus(tunnel, 'disconnected');
         this.registry.delete(config.id);
       }
     });
 
-    proc.on('error', (err) => {
-      writeLog(config.id, config.name, 'error', `Process error: ${err.message}`);
-      this.setStatus(tunnel, 'error', err.message);
-    });
+    if (tunnel.spawnFailed) {
+      writeLog(config.id, config.name, 'debug', 'Spawn failed before waitForReady — skipping');
+      return;
+    }
 
-    const ready = await this.waitForReady(tunnel, outputBuffer);
+    const ready = await this.waitForReady(tunnel);
+    if (tunnel.spawnFailed) {
+      writeLog(config.id, config.name, 'debug', 'Spawn failed during waitForReady — skipping ready handler');
+      return;
+    }
     if (ready) {
       await this.handleReady(tunnel);
     }
@@ -193,7 +246,6 @@ export class TunnelManager {
 
     for (const line of lines) {
       const trimmed = line.trim();
-
       let level: 'info' | 'warn' | 'error' | 'debug' = 'info';
 
       if (/error|fail|refused|denied|timeout/i.test(trimmed)) {
@@ -208,51 +260,75 @@ export class TunnelManager {
     }
   }
 
-  private async waitForReady(tunnel: ManagedTunnel, initialBuffer: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      if (this.isReadyMessage(initialBuffer)) {
-        resolve(true);
-        return;
+  private async waitForReady(tunnel: ManagedTunnel): Promise<boolean> {
+    if (tunnel.spawnFailed) return false;
+
+    const hasExistingOutput = tunnel.stderrBuffer || tunnel.stdoutBuffer;
+    if (hasExistingOutput) {
+      const combined = tunnel.stdoutBuffer + '\n' + tunnel.stderrBuffer;
+      if (this.isReadyMessage(combined)) return true;
+      if (this.isErrorMessage(combined)) {
+        writeLog(tunnel.config.id, tunnel.config.name, 'error', `Initial output indicates error:\n${combined}`);
+        this.setStatus(tunnel, 'error', this.humanReadableError(combined));
+        return false;
       }
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+
+      const done = (result: boolean) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(result);
+      };
 
       const timeout = setTimeout(() => {
-        writeLog(tunnel.config.id, tunnel.config.name, 'error', 'Tunnel connection timed out after 30s');
-        this.setStatus(tunnel, 'error', 'Connection timed out');
-        resolve(false);
+        const capturedStderr = tunnel.stderrBuffer || '(none)';
+        writeLog(tunnel.config.id, tunnel.config.name, 'error', `Tunnel connection timed out after 30s.\nCaptured stderr:\n${capturedStderr}`);
+        this.setStatus(tunnel, 'error', 'Connection timed out — check tunnel hostname and network');
+        done(false);
       }, 30000);
 
-      const onData = (data: Buffer) => {
-        const text = data.toString();
-        if (this.isReadyMessage(text)) {
-          cleanup();
-          resolve(true);
+      const onData = () => {
+        const combined = tunnel.stderrBuffer + '\n' + tunnel.stdoutBuffer;
+        if (this.isReadyMessage(combined)) {
+          done(true);
+          return;
         }
-        if (this.isErrorMessage(text)) {
-          cleanup();
-          writeLog(tunnel.config.id, tunnel.config.name, 'error', `Tunnel error: ${text.trim()}`);
-          this.setStatus(tunnel, 'error', this.humanReadableError(text));
-          resolve(false);
+        if (this.isErrorMessage(combined)) {
+          writeLog(tunnel.config.id, tunnel.config.name, 'error', `Tunnel error detected in output:\n${combined}`);
+          this.setStatus(tunnel, 'error', this.humanReadableError(combined));
+          done(false);
         }
       };
 
+      const onSpawnError = () => {
+        writeLog(tunnel.config.id, tunnel.config.name, 'debug', 'waitForReady: spawn error detected, aborting');
+        done(false);
+      };
+
       const onClose = (code: number | null) => {
-        cleanup();
+        writeLog(tunnel.config.id, tunnel.config.name, 'debug', `waitForReady: process closed with code=${code} before ready signal`);
         if (code !== 0) {
-          writeLog(tunnel.config.id, tunnel.config.name, 'error', `Process exited prematurely with code ${code}`);
-          this.setStatus(tunnel, 'error', `Process exited with code ${code}`);
+          const stderr = tunnel.stderrBuffer || '(no stderr)';
+          this.setStatus(tunnel, 'error', `Process exited (code=${code}) before tunnel ready. Stderr:\n${stderr}`);
         }
-        resolve(false);
+        done(false);
       };
 
       const cleanup = () => {
         clearTimeout(timeout);
         tunnel.proc?.stdout?.removeListener('data', onData);
         tunnel.proc?.stderr?.removeListener('data', onData);
+        tunnel.proc?.removeListener('error', onSpawnError);
         tunnel.proc?.removeListener('close', onClose);
       };
 
       tunnel.proc?.stdout?.on('data', onData);
       tunnel.proc?.stderr?.on('data', onData);
+      tunnel.proc?.on('error', onSpawnError);
       tunnel.proc?.on('close', onClose);
     });
   }
@@ -262,16 +338,17 @@ export class TunnelManager {
   }
 
   private isErrorMessage(text: string): boolean {
-    return /error|failed|refused|denied|not found|timed out/i.test(text);
+    return /error|fail(ed|ure)?|refused|denied|not found|timed out|econnrefused|enoent/i.test(text);
   }
 
   private humanReadableError(text: string): string {
     const t = text.toLowerCase();
-    if (t.includes('hostname not found') || t.includes('dns')) return 'Hostname not found - check your tunnel address';
-    if (t.includes('certificate') || t.includes('cert')) return 'Certificate error - tunnel security issue';
-    if (t.includes('connection refused')) return 'Connection refused - tunnel endpoint may be down';
-    if (t.includes('timeout') || t.includes('timed out')) return 'Connection timed out - check network and tunnel status';
-    if (t.includes('access denied') || t.includes('unauthorized')) return 'Access denied - check Cloudflare authentication';
+    if (t.includes('hostname not found') || t.includes('dns')) return 'Hostname not found — check your tunnel address';
+    if (t.includes('certificate') || t.includes('cert')) return 'Certificate error — tunnel security issue';
+    if (t.includes('connection refused') || t.includes('econnrefused')) return 'Connection refused — tunnel endpoint may be down';
+    if (t.includes('timeout') || t.includes('timed out')) return 'Connection timed out — check network and tunnel status';
+    if (t.includes('access denied') || t.includes('unauthorized')) return 'Access denied — check Cloudflare authentication';
+    if (t.includes('enoent') || t.includes('not found')) return 'Binary not found — check cloudflared path in Settings';
     return text.trim();
   }
 
@@ -308,12 +385,11 @@ export class TunnelManager {
   }
 
   private launchMstsc(tunnel: ManagedTunnel, port: number): void {
+    writeLog(tunnel.config.id, tunnel.config.name, 'info', `Launching: mstsc.exe /v:localhost:${port}`);
     const proc = spawn('mstsc.exe', [`/v:localhost:${port}`], {
       stdio: 'ignore',
       windowsHide: false,
     });
-
-    writeLog(tunnel.config.id, tunnel.config.name, 'info', `Launched mstsc.exe /v:localhost:${port}`);
 
     proc.on('error', (err) => {
       writeLog(tunnel.config.id, tunnel.config.name, 'error', `Failed to launch mstsc: ${err.message}`);
@@ -321,7 +397,7 @@ export class TunnelManager {
     });
 
     proc.on('close', () => {
-      writeLog(tunnel.config.id, tunnel.config.name, 'info', 'RDP session closed');
+      writeLog(tunnel.config.id, tunnel.config.name, 'info', 'RDP session window closed');
       if (getSettings().forgetPasswordAfterSession) {
         credentialStore.clearCredential(tunnel.config.id, tunnel.config.name, port);
       }
@@ -329,8 +405,7 @@ export class TunnelManager {
   }
 
   private launchMacRdp(tunnel: ManagedTunnel, port: number): void {
-    writeLog(tunnel.config.id, tunnel.config.name, 'info', `Tunnel ready. Connect via: localhost:${port}`);
-
+    writeLog(tunnel.config.id, tunnel.config.name, 'info', `Tunnel ready. Connect RDP client to localhost:${port}`);
     const proc = spawn('open', [
       '-b', 'com.microsoft.rdc.macos',
       '--args',
@@ -346,74 +421,67 @@ export class TunnelManager {
   }
 
   private launchLinuxRdp(tunnel: ManagedTunnel, port: number): void {
-    const clients = ['xfreerdp', 'remmina', 'krdc', 'gnome-connections'];
-    let attempted = false;
+    const clients: [string, string[]][] = [
+      ['xfreerdp', ['/v:localhost:' + port, '/u:' + tunnel.config.username, '/dynamic-resolution', '+fonts']],
+      ['remmina', ['--connect', `rdp://${tunnel.config.username}@localhost:${port}`]],
+    ];
 
-    for (const client of clients) {
+    for (const [client, args] of clients) {
       try {
-        const args: string[] = [];
-
-        if (client === 'xfreerdp') {
-          args.push('/v:localhost:' + port, '/u:' + tunnel.config.username, '/dynamic-resolution', '+fonts');
-        } else if (client === 'remmina') {
-          args.push('--connect', `rdp://${tunnel.config.username}@localhost:${port}`);
-        } else {
-          writeLog(tunnel.config.id, tunnel.config.name, 'info',
-            `Tunnel ready. Connect RDP client to localhost:${port} as ${tunnel.config.username}`
-          );
-          continue;
-        }
-
         const proc = spawn(client, args, { stdio: 'ignore' });
-        attempted = true;
-
-        proc.on('error', () => {
-        });
-
+        writeLog(tunnel.config.id, tunnel.config.name, 'info', `Launched ${client} for localhost:${port}`);
+        proc.on('error', () => {});
         proc.on('close', (code) => {
           if (code !== 0) {
             writeLog(tunnel.config.id, tunnel.config.name, 'info',
-              `Manual connection: localhost:${port} (user: ${tunnel.config.username})`
+              `${client} exited with code ${code}. Try connecting manually: localhost:${port}`
             );
           }
         });
-
         return;
       } catch {}
     }
 
-    if (!attempted) {
-      writeLog(tunnel.config.id, tunnel.config.name, 'info',
-        `No RDP client found. Connect manually to localhost:${port} as ${tunnel.config.username}`
-      );
-    }
+    writeLog(tunnel.config.id, tunnel.config.name, 'info',
+      `No RDP client found. Connect manually to localhost:${port} as ${tunnel.config.username}`
+    );
   }
 
-  private async handleUnexpectedDisconnect(tunnel: ManagedTunnel): Promise<void> {
+  private async handleUnexpectedDisconnect(
+    tunnel: ManagedTunnel,
+    code: number | null,
+    signal: string | null,
+    capturedStderr: string
+  ): Promise<void> {
     const settings = getSettings();
-    if (tunnel.reconnectAttempts < settings.autoReconnectAttempts) {
-      tunnel.reconnectAttempts++;
-      tunnel.state.status = 'reconnecting';
-      this.emitStatus(tunnel);
-      writeLog(
-        tunnel.config.id,
-        tunnel.config.name,
-        'warn',
-        `Reconnecting (attempt ${tunnel.reconnectAttempts}/${settings.autoReconnectAttempts})...`
-      );
 
-      const delay = Math.min(1000 * Math.pow(2, tunnel.reconnectAttempts - 1), 15000);
-      await new Promise((r) => setTimeout(r, delay));
-
-      try {
-        await this.startProcess(tunnel);
-      } catch (err: any) {
-        writeLog(tunnel.config.id, tunnel.config.name, 'error', `Reconnect failed: ${err.message}`);
-        this.setStatus(tunnel, 'error', err.message);
-      }
-    } else {
+    if (tunnel.reconnectAttempts >= settings.autoReconnectAttempts) {
       writeLog(tunnel.config.id, tunnel.config.name, 'error', 'Max reconnection attempts reached');
-      this.setStatus(tunnel, 'error', 'Max reconnection attempts reached');
+      this.setStatus(tunnel, 'error', `Max reconnection attempts reached. Last exit: code=${code}, signal=${signal}. Stderr: ${capturedStderr.substring(0, 500)}`);
+      return;
+    }
+
+    tunnel.reconnectAttempts++;
+    tunnel.state.status = 'reconnecting';
+    this.emitStatus(tunnel);
+    writeLog(
+      tunnel.config.id,
+      tunnel.config.name,
+      'warn',
+      `Process exited (code=${code}, signal=${signal}). Reconnecting attempt ${tunnel.reconnectAttempts}/${settings.autoReconnectAttempts}...`
+    );
+
+    const delay = Math.min(1000 * Math.pow(2, tunnel.reconnectAttempts - 1), 15000);
+    await new Promise((r) => setTimeout(r, delay));
+
+    try {
+      tunnel.spawnFailed = false;
+      tunnel.stderrBuffer = '';
+      tunnel.stdoutBuffer = '';
+      await this.startProcess(tunnel);
+    } catch (err: any) {
+      writeLog(tunnel.config.id, tunnel.config.name, 'error', `Reconnect failed: ${err.message}`);
+      this.setStatus(tunnel, 'error', err.message);
     }
   }
 
@@ -423,7 +491,6 @@ export class TunnelManager {
 
     tunnel.disconnectRequested = true;
     writeLog(tunnel.config.id, tunnel.config.name, 'info', 'Disconnecting tunnel...');
-    this.setStatus(tunnel, 'disconnected');
 
     if (tunnel.proc?.pid) {
       await new Promise<void>((resolve) => {
@@ -440,6 +507,7 @@ export class TunnelManager {
       await credentialStore.clearCredential(tunnel.config.id, tunnel.config.name, tunnel.state.localPort);
     }
 
+    this.setStatus(tunnel, 'disconnected');
     this.registry.delete(tunnelId);
   }
 
