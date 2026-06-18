@@ -25,13 +25,13 @@ jobs:
             artifact_name: linux
             build_command: npm run electron:build:linux -- --publish never
           - os: windows-latest
-            label: Windows
+            label: Windows (native RDP)
             artifact_name: windows
             build_command: npm run electron:build -- --win nsis --publish never
           - os: macos-latest
             label: macOS
             artifact_name: macos
-            build_command: npm run electron:build -- --mac dmg zip --publish never
+            build_command: npm run electron:build:mac -- --dmg --zip --publish never
 
     steps:
       - name: Checkout
@@ -46,6 +46,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache vcpkg (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
       - name: Install FreeRDP (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y freerdp2-dev
@@ -58,9 +67,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Use pre-installed vcpkg at C:\vcpkg (GitHub Actions Windows runner)
           $vcpkgRoot = "C:\vcpkg"
-          echo "VCPKG_INSTALLATION_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+          echo "VCPKG_INSTALLATION_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
           if (-not (Test-Path "$vcpkgRoot\vcpkg.exe")) {
             & "$vcpkgRoot\bootstrap-vcpkg.bat" -disableMetrics
           }
@@ -70,6 +78,17 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: ${{ matrix.build_command }}
+
+      - name: Verify addon compiled (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          if [ -f "native/rdp-addon/build/Release/rdp_addon.node" ]; then
+            echo "✅ rdp_addon.node compiled and packaged"
+          else
+            echo "❌ rdp_addon.node not found in build output"
+            exit 1
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
