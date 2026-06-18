@@ -36,7 +36,7 @@ if (vcpkgRoot) {
   const toolchain = path.join(vcpkgRoot, 'scripts', 'buildsystems', 'vcpkg.cmake');
   if (fs.existsSync(toolchain)) {
     const toolchainFwd = toolchain.replace(/\\/g, '/');
-    buildArgs.push(`--CD=-DCMAKE_TOOLCHAIN_FILE=${toolchainFwd}`);
+    buildArgs.push('--CD', `CMAKE_TOOLCHAIN_FILE=${toolchainFwd}`);
     console.log(`  vcpkg toolchain: ${toolchainFwd}`);
   }
 }
