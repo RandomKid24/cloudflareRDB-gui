@@ -43,7 +43,7 @@ function createTrayIcons(): { idle: Electron.NativeImage; connecting: Electron.N
 function createTray(): void {
   const icons = createTrayIcons();
   tray = new Tray(icons.idle);
-  tray.setToolTip('CloudflareRDP - Disconnected');
+  tray.setToolTip('TunnelGate - Disconnected');
 
   const updateTrayMenu = () => {
     if (!tray || !tunnelManager) return;
@@ -55,7 +55,7 @@ function createTray(): void {
     const iconKey = activeCount > 0 ? 'connected' : states.some((s) => s.status === 'error') ? 'error' : states.some((s) => s.status === 'connecting' || s.status === 'reconnecting') ? 'connecting' : 'idle';
     const icons = createTrayIcons();
     tray.setImage(icons[iconKey]);
-    tray.setToolTip(activeCount > 0 ? `CloudflareRDP - ${activeCount} tunnel${activeCount > 1 ? 's' : ''} active` : 'CloudflareRDP - Disconnected');
+    tray.setToolTip(activeCount > 0 ? `TunnelGate - ${activeCount} tunnel${activeCount > 1 ? 's' : ''} active` : 'TunnelGate - Disconnected');
 
     const menuItems: Electron.MenuItemConstructorOptions[] = [];
 
@@ -128,7 +128,7 @@ function createMainWindow(): void {
     height: Math.min(700, height),
     minWidth: 900,
     minHeight: 600,
-    title: 'CloudflareRDP',
+    title: 'TunnelGate',
     icon: path.join(__dirname, '../../resources/icons/icon.ico'),
     show: !getSettings().startMinimizedToTray,
     webPreferences: {
@@ -171,7 +171,7 @@ app.whenReady().then(() => {
   createTray();
   createMainWindow();
 
-  writeLog('system', 'System', 'info', 'CloudflareRDP started');
+  writeLog('system', 'System', 'info', 'TunnelGate started');
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

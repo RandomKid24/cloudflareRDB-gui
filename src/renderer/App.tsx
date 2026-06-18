@@ -28,7 +28,7 @@ function App() {
         flexShrink: 0,
       }}>
         <div style={{ padding: '0 16px 20px' }}>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>CloudflareRDP</div>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>TunnelGate</div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>One-click RDP tunnels</div>
         </div>
 

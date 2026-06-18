@@ -82,7 +82,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager): void {
 
     const result = await dialog.showSaveDialog(win, {
       title: 'Export Logs',
-      defaultPath: `cloudflare-rdp-logs-${Date.now()}.txt`,
+      defaultPath: `tunnelgate-logs-${Date.now()}.txt`,
       filters: [{ name: 'Text Files', extensions: ['txt'] }],
     });
 

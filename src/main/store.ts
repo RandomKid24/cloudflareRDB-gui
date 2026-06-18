@@ -16,7 +16,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export const store = new Store<Schema>({
-  name: 'cloudflare-rdp-config',
+  name: 'tunnelgate-config',
   schema: {
     tunnels: {
       type: 'array',

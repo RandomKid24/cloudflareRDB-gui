@@ -94,7 +94,7 @@ jobs:
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "title=Server Operator ${TAG}" >> "$GITHUB_OUTPUT"
+          echo "title=TunnelGate ${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Publish release with all artifacts
         env:

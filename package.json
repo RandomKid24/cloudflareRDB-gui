@@ -1,9 +1,9 @@
 {
-  "name": "cloudflare-rdp",
+  "name": "tunnelgate",
   "version": "1.0.0",
   "description": "One-Click RDP via Cloudflare Tunnel",
-  "author": { "name": "CloudflareRDP", "email": "cloudflarerdp@example.com" },
-  "homepage": "https://github.com/cloudflarerdp/app",
+  "author": { "name": "TunnelGate", "email": "tunnelgate@example.com" },
+  "homepage": "https://github.com/tunnelgate/app",
   "main": "dist/main/index.js",
   "scripts": {
     "dev:renderer": "vite",

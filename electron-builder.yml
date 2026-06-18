@@ -1,5 +1,5 @@
-appId: com.cloudflarerdp.app
-productName: CloudflareRDP
+appId: com.tunnelgate.app
+productName: TunnelGate
 directories:
   output: release
   buildResources: resources
