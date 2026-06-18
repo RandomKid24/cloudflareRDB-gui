@@ -73,11 +73,12 @@ jobs:
           & "$vcpkgRoot\vcpkg" integrate install
           & "$vcpkgRoot\vcpkg" list
 
-      - name: Debug vcpkg env (Windows)
+      - name: Debug vcpkg (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          echo "VCPKG_INSTALLATION_ROOT=$env:VCPKG_INSTALLATION_ROOT"
+          vcpkg list
+          dir C:\vcpkg\installed\x64-windows\share -ErrorAction SilentlyContinue
           dir C:\vcpkg\installed\x64-windows\share\freerdp -ErrorAction SilentlyContinue
 
       - name: Build desktop artifacts
