@@ -85,6 +85,7 @@ jobs:
       - name: Build desktop artifacts
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          CMAKE_TOOLCHAIN_FILE: C:/vcpkg/scripts/buildsystems/vcpkg.cmake
         run: ${{ matrix.build_command }}
 
       - name: Verify addon compiled (Windows)
