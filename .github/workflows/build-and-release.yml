@@ -50,8 +50,8 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/cache@v4
         with:
-          path: vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          path: C:\vcpkg\installed
+          key: vcpkg-${{ runner.os }}-freerdp
           restore-keys: |
             vcpkg-${{ runner.os }}-
 
@@ -69,11 +69,9 @@ jobs:
         run: |
           $vcpkgRoot = "C:\vcpkg"
           echo "VCPKG_INSTALLATION_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "$vcpkgRoot" | Out-File -FilePath $env:GITHUB_PATH -Append
-          if (-not (Test-Path "$vcpkgRoot\vcpkg.exe")) {
-            & "$vcpkgRoot\bootstrap-vcpkg.bat" -disableMetrics
-          }
-          vcpkg install --triplet x64-windows
+          & "$vcpkgRoot\vcpkg" install freerdp:x64-windows
+          & "$vcpkgRoot\vcpkg" integrate install
+          & "$vcpkgRoot\vcpkg" list
 
       - name: Build desktop artifacts
         env:
