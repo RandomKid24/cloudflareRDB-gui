@@ -73,6 +73,12 @@ if (cmakeCheck.status !== 0) {
 }
 console.log(`  cmake: ${cmakeCheck.stdout.split('\n')[0]}`);
 
+// Diagnostic: check FreeRDP files exist
+const freerdpConfigPath = path.join(vcpkgRoot, 'installed', 'x64-windows', 'share', 'freerdp', 'FreeRDPConfig.cmake');
+console.log(`  FreeRDP cmake config exists: ${fs.existsSync(freerdpConfigPath)}`);
+const freerdpHeader = path.join(vcpkgRoot, 'installed', 'x64-windows', 'include', 'freerdp', 'freerdp.h');
+console.log(`  FreeRDP header exists: ${fs.existsSync(freerdpHeader)}`);
+
 // Configure
 const configArgs = [
   '-G', 'Visual Studio 18 2026',
