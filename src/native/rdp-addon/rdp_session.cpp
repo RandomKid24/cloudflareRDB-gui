@@ -25,14 +25,12 @@ BOOL RdpSession::postConnectCallback(freerdp* instance) {
   RdpSession* self = getSelf(instance->context);
   if (!self) return FALSE;
 
-  // Initialize GDI with the correct pixel format after connection is established
   if (gdi_init(instance, PIXEL_FORMAT_BGRX32) != TRUE) {
     self->lastError_ = "gdi_init failed in PostConnect";
     if (self->listener_) self->listener_->onError(self->lastError_.c_str());
     return FALSE;
   }
 
-  // Register update callbacks after GDI is ready
   self->context_->update->BeginPaint = beginPaint;
   self->context_->update->EndPaint = endPaint;
   self->context_->update->BitmapUpdate = bitmapUpdate;
@@ -83,7 +81,6 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
 
-  // Register PostConnect callback — gdi_init must happen after connection
   instance_->PostConnect = postConnectCallback;
 
   BOOL connectResult = freerdp_connect(instance_);
@@ -182,6 +179,40 @@ BOOL RdpSession::beginPaint(rdpContext* ctx) {
 }
 
 BOOL RdpSession::endPaint(rdpContext* ctx) {
+  RdpSession* self = getSelf(ctx);
+  if (!self || !self->listener_) return TRUE;
+
+  rdpGdi* gdi = ctx->gdi;
+  if (!gdi || !gdi->primary_buffer) return TRUE;
+
+  HGDI_WND wnd = gdi->primary->hdc->hwnd;
+  if (wnd->invalid->null)
+    return TRUE;
+
+  int w = gdi->width;
+  int h = gdi->height;
+  int stride = gdi->stride;
+  int bpp = 4;
+
+  // BGRX -> RGBA conversion
+  const BYTE* src = gdi->primary_buffer;
+  std::vector<uint8_t> rgba(w * h * bpp);
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      int si = y * stride + x * bpp;
+      int di = (y * w + x) * bpp;
+      rgba[di + 0] = src[si + 2];
+      rgba[di + 1] = src[si + 1];
+      rgba[di + 2] = src[si + 0];
+      rgba[di + 3] = 255;
+    }
+  }
+
+  self->listener_->onBitmapUpdate(0, 0, w, h, rgba.data(), rgba.size());
+
+  wnd->invalid->null = TRUE;
+  wnd->ninvalid = 0;
+
   return TRUE;
 }
 

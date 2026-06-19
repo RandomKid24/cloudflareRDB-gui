@@ -10,6 +10,7 @@
 #include <atomic>
 #include <memory>
 #include <functional>
+#include <vector>
 
 class RdpFrameListener {
 public:
