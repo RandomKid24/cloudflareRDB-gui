@@ -17,7 +17,6 @@ extraResources:
     filter:
       - "**/*"
 win:
-  msvcRuntime: "include"
   target:
     - target: nsis
       arch:
