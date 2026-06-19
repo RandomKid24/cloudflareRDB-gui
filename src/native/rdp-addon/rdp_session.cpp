@@ -80,7 +80,7 @@ bool RdpSession::connect() {
 
 #ifdef _WIN32
   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
-  freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
+  freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
 #else
   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
 #endif
