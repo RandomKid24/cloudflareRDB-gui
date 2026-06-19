@@ -1,7 +1,5 @@
 #include "rdp_session.h"
 #include <freerdp/gdi/gdi.h>
-#include <freerdp/graphics.h>
-#include <freerdp/event.h>
 #include <freerdp/input.h>
 
 struct RdpSessionContext {
@@ -31,10 +29,11 @@ BOOL RdpSession::postConnectCallback(freerdp* instance) {
     return FALSE;
   }
 
+  // Only set BeginPaint/EndPaint/DesktopResize.
+  // Do NOT set BitmapUpdate or SurfaceBits — GDI handles them internally
+  // and calls EndPaint with the decoded framebuffer.
   self->context_->update->BeginPaint = beginPaint;
   self->context_->update->EndPaint = endPaint;
-  self->context_->update->BitmapUpdate = bitmapUpdate;
-  self->context_->update->SurfaceBits = surfaceBits;
   self->context_->update->DesktopResize = desktopResize;
 
   return TRUE;
@@ -133,25 +132,14 @@ void RdpSession::disconnect() {
 
 void RdpSession::pump() {
   while (running_ && connected_) {
-    DWORD status = freerdp_check_fds(instance_);
-    if (status != TRUE) {
-      if (listener_) listener_->onDisconnect("freerdp_check_fds failed");
-      connected_ = false;
-      break;
-    }
-
-    UINT32 wstatus = freerdp_get_last_error(context_);
-    if (wstatus != FREERDP_ERROR_SUCCESS) {
-      if (running_) {
-        char buf[128];
-        snprintf(buf, sizeof(buf), "RDP error: code=%u", wstatus);
-        if (listener_) listener_->onError(buf);
+    if (!freerdp_check_event_handles(context_)) {
+      if (freerdp_shall_disconnect_context(context_)) {
+        if (listener_) listener_->onDisconnect("RDP server disconnected");
         connected_ = false;
+        break;
       }
-      break;
     }
-
-    Sleep(50);
+    usleep(10000);
   }
 }
 
@@ -189,65 +177,39 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
   if (wnd->invalid->null)
     return TRUE;
 
-  int w = gdi->width;
-  int h = gdi->height;
+  int x = wnd->invalid->x;
+  int y = wnd->invalid->y;
+  int w = wnd->invalid->w;
+  int h = wnd->invalid->h;
+
+  if (w <= 0 || h <= 0) {
+    wnd->invalid->null = TRUE;
+    return TRUE;
+  }
+
+  int fullW = gdi->width;
   int stride = gdi->stride;
   int bpp = 4;
 
-  // BGRX -> RGBA conversion
   const BYTE* src = gdi->primary_buffer;
   std::vector<uint8_t> rgba(w * h * bpp);
-  for (int y = 0; y < h; y++) {
-    for (int x = 0; x < w; x++) {
-      int si = y * stride + x * bpp;
-      int di = (y * w + x) * bpp;
-      rgba[di + 0] = src[si + 2];
-      rgba[di + 1] = src[si + 1];
-      rgba[di + 2] = src[si + 0];
-      rgba[di + 3] = 255;
+
+  for (int row = 0; row < h; row++) {
+    const BYTE* srcRow = src + (y + row) * stride + x * bpp;
+    uint8_t* dstRow = rgba.data() + row * w * bpp;
+    for (int col = 0; col < w; col++) {
+      dstRow[col * 4 + 0] = srcRow[col * 4 + 2];
+      dstRow[col * 4 + 1] = srcRow[col * 4 + 1];
+      dstRow[col * 4 + 2] = srcRow[col * 4 + 0];
+      dstRow[col * 4 + 3] = 255;
     }
   }
 
-  self->listener_->onBitmapUpdate(0, 0, w, h, rgba.data(), rgba.size());
+  self->listener_->onBitmapUpdate(x, y, w, h, rgba.data(), rgba.size());
 
   wnd->invalid->null = TRUE;
   wnd->ninvalid = 0;
 
-  return TRUE;
-}
-
-BOOL RdpSession::bitmapUpdate(rdpContext* ctx, const BITMAP_UPDATE* bitmap) {
-  RdpSession* self = getSelf(ctx);
-  if (!self || !self->listener_) return TRUE;
-
-  for (int i = 0; i < bitmap->number; i++) {
-    const BITMAP_DATA* bmp = &bitmap->rectangles[i];
-    int x = bmp->destLeft;
-    int y = bmp->destTop;
-    int w = bmp->destRight - bmp->destLeft;
-    int h = bmp->destBottom - bmp->destTop;
-
-    if (w <= 0 || h <= 0) continue;
-    if (bmp->bitmapLength <= 0) continue;
-
-    self->listener_->onBitmapUpdate(x, y, w, h,
-      bmp->bitmapDataStream, bmp->bitmapLength);
-  }
-  return TRUE;
-}
-
-BOOL RdpSession::surfaceBits(rdpContext* ctx, const SURFACE_BITS_COMMAND* cmd) {
-  RdpSession* self = getSelf(ctx);
-  if (!self || !self->listener_) return TRUE;
-
-  int w = cmd->bmp.width;
-  int h = cmd->bmp.height;
-
-  if (w <= 0 || h <= 0 || !cmd->bmp.bitmapData || cmd->bmp.bitmapDataLength <= 0)
-    return TRUE;
-
-  self->listener_->onBitmapUpdate(cmd->destLeft, cmd->destTop, w, h,
-    cmd->bmp.bitmapData, cmd->bmp.bitmapDataLength);
   return TRUE;
 }
 

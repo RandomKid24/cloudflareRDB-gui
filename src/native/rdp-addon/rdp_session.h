@@ -42,8 +42,6 @@ public:
 private:
   static BOOL beginPaint(rdpContext* ctx);
   static BOOL endPaint(rdpContext* ctx);
-  static BOOL bitmapUpdate(rdpContext* ctx, const BITMAP_UPDATE* bitmap);
-  static BOOL surfaceBits(rdpContext* ctx, const SURFACE_BITS_COMMAND* cmd);
   static BOOL desktopResize(rdpContext* ctx);
   static BOOL postConnectCallback(freerdp* instance);
 
