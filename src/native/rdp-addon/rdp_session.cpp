@@ -23,15 +23,16 @@ BOOL RdpSession::postConnectCallback(freerdp* instance) {
   RdpSession* self = getSelf(instance->context);
   if (!self) return FALSE;
 
+  fprintf(stderr, "[RDP] postConnect called, gdi=%p\n", (void*)instance->context->gdi);
+
   if (gdi_init(instance, PIXEL_FORMAT_BGRX32) != TRUE) {
     self->lastError_ = "gdi_init failed in PostConnect";
     if (self->listener_) self->listener_->onError(self->lastError_.c_str());
     return FALSE;
   }
 
-  // Only set BeginPaint/EndPaint/DesktopResize.
-  // Do NOT set BitmapUpdate or SurfaceBits — GDI handles them internally
-  // and calls EndPaint with the decoded framebuffer.
+  fprintf(stderr, "[RDP] gdi_init OK, primary_buffer=%p\n", (void*)instance->context->gdi->primary_buffer);
+
   self->context_->update->BeginPaint = beginPaint;
   self->context_->update->EndPaint = endPaint;
   self->context_->update->DesktopResize = desktopResize;
@@ -171,13 +172,25 @@ BOOL RdpSession::beginPaint(rdpContext* ctx) {
 }
 
 BOOL RdpSession::endPaint(rdpContext* ctx) {
+  fprintf(stderr, "[RDP] endPaint called\n");
+  fflush(stderr);
+
   RdpSession* self = getSelf(ctx);
-  if (!self || !self->listener_) return TRUE;
+  if (!self || !self->listener_) {
+    fprintf(stderr, "[RDP] endPaint: no self or listener\n");
+    return TRUE;
+  }
 
   rdpGdi* gdi = ctx->gdi;
-  if (!gdi || !gdi->primary_buffer) return TRUE;
+  if (!gdi || !gdi->primary_buffer) {
+    fprintf(stderr, "[RDP] endPaint: no gdi or buffer\n");
+    return TRUE;
+  }
 
   HGDI_WND wnd = gdi->primary->hdc->hwnd;
+  fprintf(stderr, "[RDP] endPaint: invalid->null=%d\n", wnd->invalid->null);
+  fflush(stderr);
+
   if (wnd->invalid->null)
     return TRUE;
 
@@ -210,6 +223,9 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
   }
 
   self->listener_->onBitmapUpdate(x, y, w, h, rgba.data(), rgba.size());
+
+  fprintf(stderr, "[RDP] endPaint sent frame: (%d,%d %dx%d)\n", x, y, w, h);
+  fflush(stderr);
 
   wnd->invalid->null = TRUE;
   wnd->ninvalid = 0;
