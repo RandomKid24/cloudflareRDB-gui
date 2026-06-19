@@ -29,6 +29,10 @@ mac:
         - arm64
   icon: resources/icons/icon.png
   category: public.app-category.utilities
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
 linux:
   target:
     - target: AppImage

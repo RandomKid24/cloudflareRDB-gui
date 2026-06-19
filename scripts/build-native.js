@@ -308,6 +308,13 @@ if (isMac) {
       }
     }
     console.log('  Updated dylib install names and rpaths');
+    // Ad-hoc sign all dylibs so macOS doesn't kill the process on hardened runtime
+    allLibs = [...frpDylibPaths, addonPath, ...copiedTransitive];
+    for (const lib of allLibs) {
+      if (!fs.existsSync(lib)) continue;
+      spawnSync('codesign', ['--force', '--sign', '-', lib], { stdio: 'ignore' });
+    }
+    console.log('  Ad-hoc signed all dylibs');
   }
 }
 
