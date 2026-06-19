@@ -43,6 +43,7 @@ const cmakeJsHome = path.join(
 const nodeInc = path.join(cmakeJsHome, 'include', 'node');
 const nodeLib = path.join(cmakeJsHome, 'x64', 'node.lib');
 const winDelayHook = path.join(__dirname, '..', 'node_modules', 'cmake-js', 'lib', 'cpp', 'win_delay_load_hook.cc');
+const napiDir = path.join(__dirname, '..', 'node_modules', 'node-addon-api');
 
 const vcpkgRoot = process.env.VCPKG_ROOT || process.env.VCPKG_INSTALLATION_ROOT || 'C:\\vcpkg';
 const toolchain = path.join(vcpkgRoot, 'scripts', 'buildsystems', 'vcpkg.cmake').replace(/\\/g, '/');
@@ -83,6 +84,7 @@ const configArgs = [
   `-DCMAKE_JS_INC=${nodeInc.replace(/\\/g, '/')}`,
   `-DCMAKE_JS_LIB=${nodeLib.replace(/\\/g, '/')}`,
   `-DCMAKE_JS_SRC=${winDelayHook.replace(/\\/g, '/')}`,
+  `-DNAPI_DIR=${napiDir.replace(/\\/g, '/')}`,
   `-DNODE_RUNTIME=electron`,
   `-DNODE_RUNTIMEVERSION=${ELECTRON_VERSION}`,
   `-DNODE_ARCH=x64`,
