@@ -59,7 +59,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\vcpkg\installed
-          key: vcpkg-freerdp-v2
+          key: vcpkg-freerdp-2.11.2-v1
           restore-keys: |
             vcpkg-freerdp-
 
@@ -78,6 +78,9 @@ jobs:
           $vcpkgRoot = "C:\vcpkg"
           echo "VCPKG_INSTALLATION_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
           if (!(Test-Path "$vcpkgRoot\installed\x64-windows\share\freerdp\FreeRDPConfig.cmake")) {
+            pushd "$vcpkgRoot"
+            git checkout 389178885d7060149235e37f9ef005265f9d0d22 -- ports/freerdp
+            popd
             & "$vcpkgRoot\vcpkg" install freerdp:x64-windows --no-binarycaching
           } else {
             Write-Host "freerdp already installed, skipping"
