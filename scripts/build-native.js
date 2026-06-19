@@ -80,6 +80,7 @@ const configArgs = [
   `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`,
   `-DVCPKG_TARGET_TRIPLET=x64-windows`,
   `-DVCPKG_INSTALLED_DIR=C:/vcpkg/installed`,
+  `-DCMAKE_PREFIX_PATH=C:/vcpkg/installed/x64-windows`,
   `-DCMAKE_BUILD_TYPE=Release`,
   `-DCMAKE_JS_INC=${nodeInc.replace(/\\/g, '/')}`,
   `-DCMAKE_JS_LIB=${nodeLib.replace(/\\/g, '/')}`,

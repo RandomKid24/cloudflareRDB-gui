@@ -59,9 +59,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\vcpkg\installed
-          key: vcpkg-freerdp-2.11.2-v1
-          restore-keys: |
-            vcpkg-freerdp-
+          key: vcpkg-freerdp-2.11.2-v2
 
       - name: Install FreeRDP (Linux)
         if: runner.os == 'Linux'
