@@ -17,22 +17,7 @@ else()
   message(FATAL_ERROR "FreeRDP CMake config not found.\nInstall via vcpkg: vcpkg install freerdp:x64-windows\nThen set -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake")
 endif()
 
-add_library(rdp_addon SHARED rdp_module.cpp rdp_session.cpp)
-target_include_directories(rdp_addon PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(rdp_addon PRIVATE ${FREERDP_TARGET} ${FREERDP_CLIENT_TARGET} ${WINPR_TARGET})
+add_library(rdp_addon SHARED rdp_module.cpp rdp_session.cpp ${CMAKE_JS_SRC})
+target_include_directories(rdp_addon PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_JS_INC})
+target_link_libraries(rdp_addon PRIVATE ${FREERDP_TARGET} ${FREERDP_CLIENT_TARGET} ${WINPR_TARGET} ${CMAKE_JS_LIB})
 set_target_properties(rdp_addon PROPERTIES PREFIX "" SUFFIX ".node")
-
-target_include_directories(rdp_addon PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_link_libraries(rdp_addon PRIVATE
-  ${FREERDP_TARGET}
-  ${FREERDP_CLIENT_TARGET}
-  ${WINPR_TARGET}
-)
-
-set_target_properties(rdp_addon PROPERTIES
-  PREFIX ""
-  SUFFIX ".node"
-)
