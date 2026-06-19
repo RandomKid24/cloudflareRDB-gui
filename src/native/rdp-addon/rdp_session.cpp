@@ -133,13 +133,17 @@ void RdpSession::disconnect() {
 void RdpSession::pump() {
   while (running_ && connected_) {
     if (!freerdp_check_event_handles(context_)) {
-      if (freerdp_shall_disconnect_context(context_)) {
+      if (freerdp_shall_disconnect(instance_)) {
         if (listener_) listener_->onDisconnect("RDP server disconnected");
         connected_ = false;
         break;
       }
     }
+#ifdef _WIN32
+    Sleep(10);
+#else
     usleep(10000);
+#endif
   }
 }
 
