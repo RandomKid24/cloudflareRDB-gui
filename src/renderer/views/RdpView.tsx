@@ -139,6 +139,32 @@ export function RdpView({ tunnel, onBack }: Props) {
     handleBack();
   }, [handleBack]);
 
+  const handleRetry = useCallback(async () => {
+    if (!tunnel) return;
+    setError('');
+    setStatus('disconnected');
+    await window.cloudflareRdp.rdp.disconnect(tunnel.id).catch(() => {});
+    setStatus('connecting');
+    try {
+      await window.cloudflareRdp.rdp.connect(tunnel.id);
+      setStatus('connected');
+    } catch (err: any) {
+      const msg = err.message || 'Failed to connect RDP view';
+      if (isPasswordExpired(msg)) {
+        setPasswordUpdateRequired(true);
+        setStatus('disconnected');
+      } else {
+        setStatus('error');
+        setError(msg);
+      }
+    }
+  }, [tunnel]);
+
+  const handleLaunchNativeClient = useCallback(() => {
+    if (!tunnel) return;
+    window.cloudflareRdp.rdp.launchNativeClient(tunnel.id);
+  }, [tunnel]);
+
   if (!tunnel) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
@@ -173,6 +199,11 @@ export function RdpView({ tunnel, onBack }: Props) {
            status === 'error' ? 'Error' : 'Disconnected'}
         </span>
         <div style={{ flex: 1 }} />
+        {(status === 'connected' || status === 'error') && (
+          <button onClick={handleLaunchNativeClient} style={toolbarBtnStyle}>
+            Open Native Client
+          </button>
+        )}
         <button onClick={toggleFullscreen} style={toolbarBtnStyle}>
           {fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
         </button>
@@ -258,31 +289,26 @@ export function RdpView({ tunnel, onBack }: Props) {
         }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>RDP View Error</div>
           {error}
-          {addonAvailable === false && (
-            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => {
-                  window.cloudflareRdp.tunnels.connect(tunnel.id);
-                  handleBack();
-                }}
-                style={{
-                  padding: '6px 14px', fontSize: 12, fontWeight: 600,
-                  background: '#fff', color: '#222', border: 'none', borderRadius: 4, cursor: 'pointer',
-                }}
-              >
-                Open Native Client Instead
-              </button>
-              <button
-                onClick={handleBack}
-                style={{
-                  padding: '6px 14px', fontSize: 12,
-                  background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 4, cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          )}
+          <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+            <button onClick={handleRetry} style={{
+              padding: '6px 14px', fontSize: 12, fontWeight: 600,
+              background: '#fff', color: '#222', border: 'none', borderRadius: 4, cursor: 'pointer',
+            }}>
+              Retry Connection
+            </button>
+            <button onClick={handleLaunchNativeClient} style={{
+              padding: '6px 14px', fontSize: 12,
+              background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 4, cursor: 'pointer',
+            }}>
+              Open Native Client
+            </button>
+            <button onClick={handleBack} style={{
+              padding: '6px 14px', fontSize: 12,
+              background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 4, cursor: 'pointer',
+            }}>
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 

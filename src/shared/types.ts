@@ -74,6 +74,7 @@ export const IPC_CHANNELS = {
   RDP_VIEW_STATE: 'rdp:view-state',
   RDP_AVAILABLE: 'rdp:available',
   RDP_VIEW_UPDATE_PASSWORD: 'rdp:view-update-password',
+  LAUNCH_NATIVE_CLIENT: 'rdp:launch-native-client',
 } as const;
 
 export type RdpViewStatus = 'disconnected' | 'connecting' | 'connected' | 'error';

@@ -26,6 +26,7 @@ declare global {
       };
       rdp: {
         isAvailable: () => Promise<{ available: boolean; error?: string }>;
+        launchNativeClient: (tunnelId: string) => void;
         connect: (tunnelId: string, width?: number, height?: number) => Promise<boolean>;
         disconnect: (tunnelId: string) => Promise<void>;
         sendMouse: (tunnelId: string, flags: number, x: number, y: number) => void;

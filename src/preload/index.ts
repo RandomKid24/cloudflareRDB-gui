@@ -68,9 +68,13 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHECK_CLOUDFLARED),
   },
 
-  rdp: {
-    isAvailable: (): Promise<{ available: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.RDP_AVAILABLE),
+    rdp: {
+      isAvailable: (): Promise<{ available: boolean; error?: string }> =>
+        ipcRenderer.invoke(IPC_CHANNELS.RDP_AVAILABLE),
+
+      launchNativeClient: (tunnelId: string): void => {
+        ipcRenderer.invoke(IPC_CHANNELS.LAUNCH_NATIVE_CLIENT, tunnelId);
+      },
 
     connect: (tunnelId: string, width?: number, height?: number): Promise<boolean> =>
       ipcRenderer.invoke(IPC_CHANNELS.RDP_VIEW_CONNECT, tunnelId, width, height),

@@ -191,6 +191,10 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
     return true;
   });
 
+  ipcMain.handle(IPC_CHANNELS.LAUNCH_NATIVE_CLIENT, (_event, tunnelId: string) => {
+    tunnelManager.launchNativeClient(tunnelId);
+  });
+
   ipcMain.handle(IPC_CHANNELS.RDP_VIEW_DISCONNECT, (_event, tunnelId: string) => {
     rdpViewManager?.disconnectView(tunnelId);
   });

@@ -1,5 +1,6 @@
 import { BrowserWindow } from 'electron';
 import path from 'path';
+const isWin = process.platform === 'win32';
 import { writeLog } from './logger';
 
 interface RdpAddon {
@@ -120,6 +121,13 @@ export class RdpViewManager {
 
   private handleEvent(tunnelId: string, type: string, args: any[]) {
     if (!this.win || this.win.isDestroyed()) return;
+
+    if (isWin && type === 'error' && typeof args[0] === 'string' && args[0].includes('code=131087')) {
+      writeLog(tunnelId, 'RDP View', 'warn',
+        'FreeRDP on Windows reported password-expired (131087), likely false positive due to NLA/SSPI compatibility. Treating as generic error.');
+      args = ['RDP authentication failed (NLA compatibility issue). Try reconnecting or use the native client.'];
+    }
+
     try {
       this.win.webContents.send('rdp:event', tunnelId, type, ...args);
     } catch {}
