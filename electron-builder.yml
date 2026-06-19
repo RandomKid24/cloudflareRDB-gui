@@ -29,8 +29,11 @@ mac:
         - arm64
   icon: resources/icons/icon.png
   category: public.app-category.utilities
-  hardenedRuntime: true
+  hardenedRuntime: false
   gatekeeperAssess: false
+  # NOTE: hardened runtime is applied via manual codesign after build
+  # because electron-builder's re-signing corrupts Electron Framework on macOS 26.
+  # Run: codesign --deep --force --sign - --options runtime --entitlements build/entitlements.mac.plist TunnelGate.app
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
 linux:

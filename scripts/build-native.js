@@ -244,6 +244,7 @@ if (isMac) {
       if (fs.existsSync(src)) {
         const dest = path.join(addonOutDir, dylib);
         fs.copyFileSync(src, dest);
+        fs.chmodSync(dest, 0o755);
         console.log(`  Copied ${dylib}`);
         spawnSync('install_name_tool', ['-id', `@loader_path/${dylib}`, dest], { stdio: 'ignore' });
       } else {
@@ -268,53 +269,34 @@ if (isMac) {
         }
       }
     }
-    // Copy transitive deps (openssl, etc.) from their current paths
-    const transitiveDeps = new Set();
-    for (const dylib of dylibs) {
-      const p = path.join(addonOutDir, dylib);
-      if (!fs.existsSync(p)) continue;
-      const result = spawnSync('otool', ['-L', p], { encoding: 'utf8' });
+    // Recursively resolve transitive dylib dependencies
+    const copiedTransitive = [];
+    const seen = new Set(dylibs.map(d => path.basename(d)));
+    const queue = [...dylibs.map(d => path.join(addonOutDir, d)), path.join(addonOutDir, addonName)];
+    while (queue.length > 0) {
+      const lib = queue.shift();
+      if (!fs.existsSync(lib)) continue;
+      const result = spawnSync('otool', ['-L', lib], { encoding: 'utf8' });
       if (result.status !== 0) continue;
       for (const line of result.stdout.split('\n')) {
-        const m = line.match(/^\t(\/.+\.dylib)\s/);
-        if (m) {
-          const dep = m[1];
-          if (dep.includes('/usr/') || dep.includes('/System/')) continue;
-          if (dylibs.some(d => dep.includes(d))) continue;
-          transitiveDeps.add(dep);
-        }
-      }
-    }
-    const copiedTransitive = [];
-    for (const dep of transitiveDeps) {
-      const basename = path.basename(dep);
-      const dest = path.join(addonOutDir, basename);
-      if (!fs.existsSync(dest)) {
-        fs.copyFileSync(dep, dest);
-        console.log(`  Copied transitive dep ${basename}`);
-        spawnSync('install_name_tool', ['-id', `@loader_path/${basename}`, dest], { stdio: 'ignore' });
-        copiedTransitive.push(dest);
-        // Also check THIS transitive dep for its own deps
-        const depResult = spawnSync('otool', ['-L', dest], { encoding: 'utf8' });
-        if (depResult.status === 0) {
-          for (const line of depResult.stdout.split('\n')) {
-            const m = line.match(/^\t(\/.+\.dylib)\s/);
-            if (m) {
-              const subdep = m[1];
-              if (subdep.includes('/usr/') || subdep.includes('/System/')) continue;
-              if (dylibs.some(d => subdep.includes(d))) continue;
-              if (!transitiveDeps.has(subdep) && subdep !== dep) {
-                const subBase = path.basename(subdep);
-                const subDest = path.join(addonOutDir, subBase);
-                if (!fs.existsSync(subDest)) {
-                  fs.copyFileSync(subdep, subDest);
-                  console.log(`  Copied nested dep ${subBase}`);
-                  spawnSync('install_name_tool', ['-id', `@loader_path/${subBase}`, subDest], { stdio: 'ignore' });
-                  copiedTransitive.push(subDest);
-                }
-                transitiveDeps.add(subdep);
-              }
-            }
+        const m = line.match(/^\t\s*(\/.+\.dylib)\s/);
+        if (!m) continue;
+        const depPath = m[1];
+        if (depPath.includes('/usr/') || depPath.includes('/System/')) continue;
+        const basename = path.basename(depPath);
+        if (seen.has(basename)) continue;
+        seen.add(basename);
+        const dest = path.join(addonOutDir, basename);
+        if (!fs.existsSync(dest)) {
+          try {
+            fs.copyFileSync(depPath, dest);
+            fs.chmodSync(dest, 0o755);
+            console.log(`  Copied transitive dep ${basename}`);
+            spawnSync('install_name_tool', ['-id', `@loader_path/${basename}`, dest], { stdio: 'ignore' });
+            copiedTransitive.push(dest);
+            queue.push(dest);
+          } catch (e) {
+            console.warn(`  Warning: failed to copy ${basename}: ${e.message}`);
           }
         }
       }
