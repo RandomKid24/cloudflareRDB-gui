@@ -168,6 +168,29 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
     return true;
   });
 
+  ipcMain.handle(IPC_CHANNELS.RDP_VIEW_UPDATE_PASSWORD, async (_event, tunnelId: string, newPassword: string) => {
+    if (!rdpViewManager) throw new Error('RDP view manager not initialized');
+
+    const tunnels = getTunnels();
+    const config = tunnels.find((t) => t.id === tunnelId);
+    if (!config) throw new Error('Tunnel not found');
+
+    config.encryptedPassword = credentialStore.encrypt(newPassword);
+    setTunnels(tunnels);
+
+    const tunnelState = tunnelManager.getRuntimeState(tunnelId);
+    const port = tunnelState?.localPort;
+    if (!port) throw new Error('Tunnel not connected — no local port');
+
+    if (isWin) {
+      await credentialStore.injectCredential(tunnelId, config.name, config.username, newPassword, port);
+    }
+
+    rdpViewManager.disconnectView(tunnelId);
+    await rdpViewManager.connectView(tunnelId, port, config.username, newPassword);
+    return true;
+  });
+
   ipcMain.handle(IPC_CHANNELS.RDP_VIEW_DISCONNECT, (_event, tunnelId: string) => {
     rdpViewManager?.disconnectView(tunnelId);
   });

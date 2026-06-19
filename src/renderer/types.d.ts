@@ -32,6 +32,7 @@ declare global {
         sendKeyboard: (tunnelId: string, flags: number, code: number) => void;
         onFrame: (callback: (tunnelId: string, rect: { x: number; y: number; w: number; h: number }, buf: ArrayBuffer) => void) => () => void;
         onEvent: (callback: (tunnelId: string, type: string, ...args: any[]) => void) => () => void;
+        updatePassword: (tunnelId: string, newPassword: string) => Promise<boolean>;
       };
     };
   }
