@@ -78,7 +78,12 @@ bool RdpSession::connect() {
   if (!password_.empty())
     freerdp_settings_set_string(settings, FreeRDP_Password, password_.c_str());
 
+#ifdef _WIN32
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
+  freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
+#else
   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
+#endif
   freerdp_settings_set_bool(settings, FreeRDP_Authentication, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_NSCodec, TRUE);
