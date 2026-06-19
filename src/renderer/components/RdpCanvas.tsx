@@ -22,6 +22,15 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
   const rafRef = useRef<number>(0);
   const mouseDownRef = useRef(false);
 
+  // Initialize canvas backing buffer on mount or dimension change
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = width;
+    canvas.height = height;
+    console.log('[RDP] canvas init:', width, height);
+  }, [width, height]);
+
   const paint = useCallback(() => {
     const frames = pendingRef.current.splice(0);
     if (frames.length === 0) return;
@@ -35,6 +44,11 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
       offscreen.width = width;
       offscreen.height = height;
       offscreenRef.current = offscreen;
+      console.log('[RDP] offscreen created at', offscreen.width, offscreen.height);
+    } else if (offscreen.width !== width || offscreen.height !== height) {
+      offscreen.width = width;
+      offscreen.height = height;
+      console.log('[RDP] offscreen resized to', width, height);
     }
 
     const ctx = offscreen.getContext('2d', { willReadFrequently: false });
@@ -55,7 +69,7 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
       dst.drawImage(offscreen, 0, 0);
     }
 
-    console.log('[RDP] paint done');
+    console.log('[RDP] paint done, canvas:', width, height);
     rafRef.current = 0;
   }, [width, height]);
 
@@ -147,6 +161,8 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
   return (
     <canvas
       ref={canvasRef}
+      width={width}
+      height={height}
       tabIndex={0}
       style={{
         width: '100%',
