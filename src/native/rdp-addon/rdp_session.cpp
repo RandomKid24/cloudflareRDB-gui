@@ -193,11 +193,11 @@ BOOL RdpSession::surfaceBits(rdpContext* ctx, const SURFACE_BITS_COMMAND* cmd) {
   int w = cmd->bmp.width;
   int h = cmd->bmp.height;
 
-  if (w <= 0 || h <= 0 || !cmd->bmp.bitmapData || cmd->bmp.bitmapDataLength <= 0)
+  if (w <= 0 || h <= 0 || !cmd->bmp.data || cmd->bmp.length <= 0)
     return TRUE;
 
   self->listener_->onBitmapUpdate(cmd->destLeft, cmd->destTop, w, h,
-    cmd->bmp.bitmapData, cmd->bmp.bitmapDataLength);
+    cmd->bmp.data, cmd->bmp.length);
   return TRUE;
 }
 
