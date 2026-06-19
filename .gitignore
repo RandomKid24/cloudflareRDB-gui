@@ -5,3 +5,5 @@ release/
 .DS_Store
 Thumbs.db
 *.log
+native/rdp-addon/build/
+src/native/rdp-addon/build/

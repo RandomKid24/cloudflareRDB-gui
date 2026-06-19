@@ -12,12 +12,11 @@ extraResources:
     to: resources/
     filter:
       - "cloudflared*"
+  - from: native/
+    to: native/
+    filter:
+      - "**/*"
 win:
-  extraResources:
-    - from: native/
-      to: native/
-      filter:
-        - "**/*"
   target:
     - target: nsis
       arch:

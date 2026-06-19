@@ -67,7 +67,45 @@ jobs:
 
       - name: Install FreeRDP (macOS)
         if: runner.os == 'macOS'
-        run: brew install freerdp
+        shell: bash
+        run: |
+          # Build FreeRDP 2.11.7 from source (brew ships 3.x, addon needs 2.x)
+          curl -sL https://github.com/FreeRDP/FreeRDP/archive/refs/tags/2.11.7.tar.gz | tar xz
+          cd FreeRDP-2.11.7
+          cmake -B build \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr/local/freerdp2 \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-no_fixup_chains" \
+            -DWITH_SERVER=OFF \
+            -DWITH_WAYLAND=OFF \
+            -DWITH_X11=OFF \
+            -DWITH_SDL2=OFF \
+            -DWITH_OPENSSL=ON \
+            -DWITH_ALSA=OFF \
+            -DWITH_PULSE=OFF \
+            -DWITH_CUPS=OFF \
+            -DWITH_PCSC=OFF \
+            -DWITH_FFMPEG=OFF \
+            -DWITH_SWSCALE=OFF \
+            -DWITH_FAAC=OFF \
+            -DWITH_FAAD2=OFF \
+            -DWITH_GSM=OFF \
+            -DWITH_JPEG=OFF \
+            -DWITH_LAME=OFF \
+            -DWITH_OPUS=OFF \
+            -DWITH_SPEEX=OFF \
+            -DWITH_WEBRTC=OFF \
+            -DWITH_CLIENT_MACAQUA=OFF \
+            -DWITH_CLIENT_MAC=OFF \
+            -DWITH_CLIENT_SDL=OFF \
+            -DWITH_CLIENT_X11=OFF \
+            -DWITH_CLIENT_HEADLESS=OFF
+          cmake --build build -j$(sysctl -n hw.logicalcpu) --target freerdp --target freerdp-client --target winpr
+          sudo cmake --install build --prefix /usr/local/freerdp2
+          # Remove the source to save disk space
+          cd .. && rm -rf FreeRDP-2.11.7 build
+          echo "FREERDP_ROOT=/usr/local/freerdp2" >> $GITHUB_ENV
 
       - name: Install FreeRDP (Windows)
         if: runner.os == 'Windows'
@@ -118,6 +156,28 @@ jobs:
             Write-Host "rdp_addon.node not found in build output"
             exit 1
           }
+
+      - name: Verify addon compiled (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [ -f "native/rdp-addon/build/Release/rdp_addon.node" ]; then
+            echo "rdp_addon.node compiled and packaged"
+          else
+            echo "rdp_addon.node not found in build output"
+            exit 1
+          fi
+
+      - name: Verify addon compiled (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          if [ -f "native/rdp-addon/build/Release/rdp_addon.node" ]; then
+            echo "rdp_addon.node compiled and packaged"
+          else
+            echo "rdp_addon.node not found in build output"
+            exit 1
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
