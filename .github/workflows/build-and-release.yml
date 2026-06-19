@@ -59,7 +59,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\vcpkg\installed
-          key: vcpkg-freerdp-${{ hashFiles('**/vcpkg.json') }}-v1
+          key: vcpkg-freerdp-v2
           restore-keys: |
             vcpkg-freerdp-
 
