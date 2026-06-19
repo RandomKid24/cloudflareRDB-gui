@@ -12,54 +12,64 @@ One-click RDP through Cloudflare Tunnel — no terminal required.
 | **Linux** | `TunnelGate-1.0.0.AppImage` | `npm run build && npx electron-builder --linux` |
 | **Linux** | `tunnelgate_1.0.0_amd64.deb` | `npm run build && npx electron-builder --linux` |
 
-> Releases are also built automatically on every push to `main` via GitHub Actions — see [workflow](.github/workflows/build-and-release.yml).
-
 ## Prerequisites
 
-- [cloudflared](https://github.com/cloudflare/cloudflared/releases) installed on your system (or place the binary in the app's `resources/` folder before packaging)
+- [cloudflared](https://github.com/cloudflare/cloudflared/releases) installed on your system
+- **macOS**: [FreeRDP 3](https://github.com/FreeRDP/FreeRDP) (`brew install freerdp`) for native RDP rendering
+- **Linux**: `apt install freerdp3-dev` or equivalent
+- **Windows**: FreeRDP 3 from vcpkg or prebuilt DLLs
 
 ## Development
 
 ```sh
 npm install
-npm run build        # compile all source
-npm run dev          # Vite dev server + Electron (macOS/Linux)
+npm run build:all     # build native addon + TypeScript + Vite
+npm run dev           # Vite dev server + Electron (macOS/Linux)
 
 # Package specific platform
-npm run build && npx electron-builder --mac    # DMG
-npm run build && npx electron-builder --win    # NSIS exe
-npm run build && npx electron-builder --linux  # AppImage + deb
+npm run build:all && npx electron-builder --mac    # DMG
+npm run build:all && npx electron-builder --win    # NSIS exe
+npm run build:all && npx electron-builder --linux  # AppImage + deb
 ```
 
-### macOS: "App is damaged" fix
+## macOS: Build & Deploy
 
-Unsigned macOS builds trigger Gatekeeper. To fix a downloaded `.app`:
-
+### App is damaged fix
 ```sh
 xattr -cr /Applications/TunnelGate.app
 ```
 
-Or build without signing by adding this to `electron-builder.yml` under `mac:`:
-
-```yaml
-mac:
-  identity: null
-  hardenedRuntime: false
-```
-
-Then rebuild:
-
+Or build without signing:
 ```sh
-CSC_IDENTITY_AUTO_DISCOVERY=false npm run build && npx electron-builder --mac
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run build:all && npx electron-builder --mac --dir
 ```
 
-## How it works
+### Electron Framework Corruption (macOS 26+)
+electron-builder's built-in `codesign` corrupts the Electron Framework binary on macOS 26 (Tahoe).
+**Always** replace it from `node_modules` after building:
+
+```bash
+cp node_modules/electron/dist/Electron.app/Contents/Frameworks/Electron\ Framework.framework/Versions/A/Electron\ Framework \
+   release/mac-arm64/TunnelGate.app/Contents/Frameworks/Electron\ Framework.framework/Versions/A/Electron\ Framework
+
+codesign --deep --force --sign - --options runtime \
+  --entitlements build/entitlements.mac.plist \
+  release/mac-arm64/TunnelGate.app
+```
+
+## How It Works
 
 1. User adds a tunnel target (hostname, username, encrypted password)
 2. One click starts `cloudflared access tcp --hostname <host> --url localhost:<port>`
-3. Once the tunnel is ready, the app injects credentials (Windows via `cmdkey`, macOS via Microsoft Remote Desktop, Linux via xfreerdp/Remmina)
-4. RDP client launches pointing at the local forwarded port
-5. Disconnect kills the cloudflared process and cleans up credentials
+3. Once the tunnel is ready, the app opens a native RDP viewer **inside the Electron window** using FreeRDP 3 GDI rendering
+4. Remote desktop frames are decoded in C++, streamed to a React `<canvas>` via IPC
+5. Keyboard/mouse input is forwarded back to the RDP server
+6. Disconnect kills the cloudflared process and cleans up credentials
+
+### RDP Rendering Pipeline
+
+See [docs/RDP_NATIVE_ADDON.md](docs/RDP_NATIVE_ADDON.md) for the complete architecture and
+implementation guide, including pixel format, threading, IPC flow, and cross-platform notes.
 
 ## Security
 

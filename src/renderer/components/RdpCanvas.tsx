@@ -42,6 +42,10 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
   const pendingRef = useRef<FrameRect[]>([]);
   const rafRef = useRef<number>(0);
   const mouseDownRef = useRef(false);
+  const widthRef = useRef(width);
+  const heightRef = useRef(height);
+  widthRef.current = width;
+  heightRef.current = height;
 
   // Initialize canvas backing buffer on mount or dimension change
   useEffect(() => {
@@ -49,11 +53,13 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
     if (!canvas) return;
     canvas.width = width;
     canvas.height = height;
-    console.log('[RDP] canvas init:', width, height);
   }, [width, height]);
 
   const paint = useCallback(() => {
     const frames = pendingRef.current.splice(0);
+    const w = widthRef.current;
+    const h = heightRef.current;
+
     if (frames.length === 0) return;
 
     const canvas = canvasRef.current;
@@ -62,44 +68,42 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
     let offscreen = offscreenRef.current;
     if (!offscreen) {
       offscreen = document.createElement('canvas');
-      offscreen.width = width;
-      offscreen.height = height;
+      offscreen.width = w;
+      offscreen.height = h;
       offscreenRef.current = offscreen;
-      console.log('[RDP] offscreen created at', offscreen.width, offscreen.height);
-    } else if (offscreen.width !== width || offscreen.height !== height) {
-      offscreen.width = width;
-      offscreen.height = height;
-      console.log('[RDP] offscreen resized to', width, height);
+    } else if (offscreen.width !== w || offscreen.height !== h) {
+      offscreen.width = w;
+      offscreen.height = h;
     }
 
     const ctx = offscreen.getContext('2d', { willReadFrequently: false });
     if (!ctx) return;
 
     for (const frame of frames) {
-      console.log('[RDP] paint frame', frame.x, frame.y, frame.w, frame.h, frame.data.byteLength);
-      const imageData = ctx.createImageData(frame.w, frame.h);
-      const src = new Uint8ClampedArray(frame.data);
-      imageData.data.set(src);
-      ctx.putImageData(imageData, frame.x, frame.y);
+      if (frame.w <= 0 || frame.h <= 0) continue;
+      try {
+        const imageData = ctx.createImageData(frame.w, frame.h);
+        const src = new Uint8ClampedArray(frame.data);
+        imageData.data.set(src);
+        ctx.putImageData(imageData, frame.x, frame.y);
+      } catch {}
     }
 
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = w;
+    canvas.height = h;
     const dst = canvas.getContext('2d');
     if (dst) {
       dst.drawImage(offscreen, 0, 0);
     }
 
-    console.log('[RDP] paint done, canvas:', width, height);
     rafRef.current = 0;
-  }, [width, height]);
+  }, []);
 
   useEffect(() => {
     if (!connected || !tunnelId) return;
 
     const frameHandler = (id: string, rect: { x: number; y: number; w: number; h: number }, buf: ArrayBuffer) => {
       if (id !== tunnelId) return;
-      console.log('[RDP] frame received', rect.x, rect.y, rect.w, rect.h, buf.byteLength);
       pendingRef.current.push({ ...rect, data: buf });
       if (!rafRef.current) {
         rafRef.current = requestAnimationFrame(paint);

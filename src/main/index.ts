@@ -115,7 +115,6 @@ function createTray(): void {
   );
 
   rdpViewManager = new RdpViewManager();
-  rdpViewManager.setWindow(mainWindow);
 
   tray.on('click', showMainWindow);
 
@@ -143,6 +142,8 @@ function createMainWindow(): void {
       sandbox: false,
     },
   });
+
+  rdpViewManager?.setWindow(mainWindow);
 
   if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
     mainWindow.loadURL('http://localhost:5173');
