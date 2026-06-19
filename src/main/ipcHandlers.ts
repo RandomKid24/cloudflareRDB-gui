@@ -168,6 +168,10 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
       throw new Error('Failed to decrypt credentials');
     }
 
+    if (isWin) {
+      await credentialStore.injectCredential(tunnelId, config.name, config.username, password, port);
+    }
+
     await rdpViewManager.connectView(tunnelId, port, config.username, password, width, height);
     return true;
   });
