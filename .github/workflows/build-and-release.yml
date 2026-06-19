@@ -59,9 +59,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\vcpkg\installed
-          key: vcpkg-${{ runner.os }}-freerdp
+          key: vcpkg-freerdp-${{ hashFiles('**/vcpkg.json') }}-v1
           restore-keys: |
-            vcpkg-${{ runner.os }}-
+            vcpkg-freerdp-
 
       - name: Install FreeRDP (Linux)
         if: runner.os == 'Linux'
@@ -77,9 +77,12 @@ jobs:
         run: |
           $vcpkgRoot = "C:\vcpkg"
           echo "VCPKG_INSTALLATION_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
-          & "$vcpkgRoot\vcpkg" install freerdp:x64-windows
+          if (!(Test-Path "$vcpkgRoot\installed\x64-windows\share\freerdp\FreeRDPConfig.cmake")) {
+            & "$vcpkgRoot\vcpkg" install freerdp:x64-windows --no-binarycaching
+          } else {
+            Write-Host "freerdp already installed, skipping"
+          }
           & "$vcpkgRoot\vcpkg" integrate install
-          & "$vcpkgRoot\vcpkg" list
 
       - name: Verify freerdp installed (Windows)
         if: runner.os == 'Windows'
