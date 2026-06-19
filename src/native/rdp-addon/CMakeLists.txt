@@ -9,6 +9,9 @@ find_package(FreeRDP CONFIG QUIET)
 find_package(FreeRDP-Client CONFIG QUIET)
 find_package(WinPR CONFIG QUIET)
 
+get_property(all_targets DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY IMPORTED_TARGETS)
+message(STATUS "Imported targets: ${all_targets}")
+
 if(TARGET FreeRDP::freerdp)
   message(STATUS "Found FreeRDP 3.x")
   set(FREERDP_TARGET FreeRDP::freerdp)
