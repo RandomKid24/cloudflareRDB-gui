@@ -60,7 +60,7 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_NSCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
-  freerdp_settings_set_uint32(settings, FreeRDP_UpdateFrameCount, 3);
+
 
   context_->update->BeginPaint = beginPaint;
   context_->update->EndPaint = endPaint;
@@ -193,11 +193,11 @@ BOOL RdpSession::surfaceBits(rdpContext* ctx, const SURFACE_BITS_COMMAND* cmd) {
   int w = cmd->destRight - cmd->destLeft;
   int h = cmd->destBottom - cmd->destTop;
 
-  if (w <= 0 || h <= 0 || !cmd->bmp.bitmapDataStream || cmd->bmp.bitmapLength <= 0)
+  if (w <= 0 || h <= 0 || !cmd->bmp.pixelData || cmd->bmp.pixelDataLength <= 0)
     return TRUE;
 
   self->listener_->onBitmapUpdate(cmd->destLeft, cmd->destTop, w, h,
-    cmd->bmp.bitmapDataStream, cmd->bmp.bitmapLength);
+    cmd->bmp.pixelData, cmd->bmp.pixelDataLength);
   return TRUE;
 }
 
