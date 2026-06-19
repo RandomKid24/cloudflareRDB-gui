@@ -76,7 +76,7 @@ export class RdpViewManager {
 
     try {
       const sessionId = this.addon.createSession(
-        '127.0.0.1', port, width, height, username, password,
+        'localhost', port, width, height, username, password,
         (x, y, w, h, buf) => {
           this.forwardFrame(tunnelId, x, y, w, h, buf);
         },

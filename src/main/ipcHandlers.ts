@@ -157,6 +157,10 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
     const port = tunnelState?.localPort;
     if (!port) throw new Error('Tunnel not connected — no local port');
 
+    if (isWin) {
+      await credentialStore.clearCredential(tunnelId, config.name, port).catch(() => {});
+    }
+
     let password: string;
     try {
       password = credentialStore.decrypt(config.encryptedPassword);
