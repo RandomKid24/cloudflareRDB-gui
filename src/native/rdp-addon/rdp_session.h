@@ -42,7 +42,7 @@ private:
   static BOOL bitmapUpdate(rdpContext* ctx, const BITMAP_UPDATE* bitmap);
   static BOOL surfaceBits(rdpContext* ctx, const SURFACE_BITS_COMMAND* cmd);
   static BOOL desktopResize(rdpContext* ctx);
-  static void errorInfo(rdpContext* ctx, UINT32 error);
+
 
   freerdp* instance_ = nullptr;
   rdpContext* context_ = nullptr;

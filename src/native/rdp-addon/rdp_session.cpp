@@ -4,6 +4,11 @@
 #include <freerdp/event.h>
 #include <freerdp/input.h>
 
+struct RdpSessionContext {
+  rdpContext _ctx;
+  RdpSession* session;
+};
+
 RdpSession::RdpSession(const std::string& host, int port,
                        int width, int height,
                        const std::string& username,
@@ -23,7 +28,7 @@ bool RdpSession::connect() {
     return false;
   }
 
-  instance_->ContextSize = sizeof(rdpContext);
+  instance_->ContextSize = sizeof(RdpSessionContext);
   instance_->ContextNew = nullptr;
   instance_->ContextFree = nullptr;
 
@@ -35,6 +40,7 @@ bool RdpSession::connect() {
   }
   context_ = instance_->context;
   context_->instance = instance_;
+  ((RdpSessionContext*)context_)->session = this;
 
   rdpSettings* settings = instance_->settings;
   freerdp_settings_set_string(settings, FreeRDP_ServerHostname, host_.c_str());
@@ -56,14 +62,13 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
   freerdp_settings_set_uint32(settings, FreeRDP_UpdateFrameCount, 3);
 
-  context_->Update->BeginPaint = beginPaint;
-  context_->Update->EndPaint = endPaint;
-  context_->Update->BitmapUpdate = bitmapUpdate;
-  context_->Update->SurfaceBits = surfaceBits;
-  context_->Update->DesktopResize = desktopResize;
-  context_->ErrorInfo = errorInfo;
+  context_->update->BeginPaint = beginPaint;
+  context_->update->EndPaint = endPaint;
+  context_->update->BitmapUpdate = bitmapUpdate;
+  context_->update->SurfaceBits = surfaceBits;
+  context_->update->DesktopResize = desktopResize;
 
-  if (gdi_init(instance_, GFX_FLAG_DEFAULT) != TRUE) {
+  if (gdi_init(instance_, 0) != TRUE) {
     if (listener_) listener_->onError("gdi_init failed");
     freerdp_context_free(instance_);
     freerdp_free(instance_);
@@ -119,10 +124,8 @@ void RdpSession::pump() {
       break;
     }
 
-    int wstatus = freerdp_get_last_error(instance_);
-    if (wstatus != FREERDP_ERROR_SUCCESS &&
-        wstatus != FREERDP_ERROR_WAITING_FOR_CONNECT &&
-        wstatus != FREERDP_ERROR_WAITING_FOR_ACTIVATION) {
+    int wstatus = freerdp_get_last_error(context_);
+    if (wstatus != FREERDP_ERROR_SUCCESS) {
       if (running_) {
         char buf[128];
         snprintf(buf, sizeof(buf), "RDP error: code=%d", wstatus);
@@ -152,7 +155,7 @@ void RdpSession::resize(int width, int height) {
 }
 
 RdpSession* RdpSession::getSelf(rdpContext* ctx) {
-  return static_cast<RdpSession*>(ctx->instance->param3);
+  return ((RdpSessionContext*)ctx)->session;
 }
 
 BOOL RdpSession::beginPaint(rdpContext* ctx) {
@@ -175,10 +178,10 @@ BOOL RdpSession::bitmapUpdate(rdpContext* ctx, const BITMAP_UPDATE* bitmap) {
     int h = bmp->destBottom - bmp->destTop;
 
     if (w <= 0 || h <= 0) continue;
-    if (bmp->bitmapDataLength <= 0) continue;
+    if (bmp->bitmapLength <= 0) continue;
 
     self->listener_->onBitmapUpdate(x, y, w, h,
-      bmp->bitmapData, bmp->bitmapDataLength);
+      bmp->bitmapDataStream, bmp->bitmapLength);
   }
   return TRUE;
 }
@@ -187,14 +190,14 @@ BOOL RdpSession::surfaceBits(rdpContext* ctx, const SURFACE_BITS_COMMAND* cmd) {
   RdpSession* self = getSelf(ctx);
   if (!self || !self->listener_) return TRUE;
 
-  int w = cmd->width;
-  int h = cmd->height;
+  int w = cmd->destRight - cmd->destLeft;
+  int h = cmd->destBottom - cmd->destTop;
 
-  if (w <= 0 || h <= 0 || !cmd->bitmapData || cmd->bitmapDataLength <= 0)
+  if (w <= 0 || h <= 0 || !cmd->bmp.bitmapDataStream || cmd->bmp.bitmapLength <= 0)
     return TRUE;
 
   self->listener_->onBitmapUpdate(cmd->destLeft, cmd->destTop, w, h,
-    cmd->bitmapData, cmd->bitmapDataLength);
+    cmd->bmp.bitmapDataStream, cmd->bmp.bitmapLength);
   return TRUE;
 }
 
@@ -210,11 +213,4 @@ BOOL RdpSession::desktopResize(rdpContext* ctx) {
   return TRUE;
 }
 
-void RdpSession::errorInfo(rdpContext* ctx, UINT32 error) {
-  RdpSession* self = getSelf(ctx);
-  if (!self || !self->listener_) return;
 
-  char buf[256];
-  snprintf(buf, sizeof(buf), "RDP protocol error: code=%u", (unsigned)error);
-  self->listener_->onError(buf);
-}

@@ -3,6 +3,8 @@
 #include <mutex>
 #include "rdp_session.h"
 
+class JsFrameListener;
+
 struct SessionHolder {
   RdpSession* session;
   JsFrameListener* listener;
