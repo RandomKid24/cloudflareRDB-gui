@@ -59,7 +59,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\vcpkg\installed
-          key: vcpkg-freerdp-2.11.2-v3
+          key: vcpkg-freerdp-2.11.2-v4
 
       - name: Install FreeRDP (Linux)
         if: runner.os == 'Linux'
@@ -85,7 +85,7 @@ jobs:
           popd
 
           Write-Host "=== Installing FreeRDP via vcpkg ==="
-          & "$vcpkgRoot\vcpkg" install freerdp:x64-windows --no-binarycaching
+          & "$vcpkgRoot\vcpkg" install freerdp:x64-windows --no-binarycaching --classic
           if ($LASTEXITCODE -ne 0) {
             Write-Host "vcpkg install failed!"
             exit 1
