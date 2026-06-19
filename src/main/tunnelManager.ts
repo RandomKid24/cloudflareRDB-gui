@@ -370,24 +370,22 @@ export class TunnelManager {
   private async handleReady(tunnel: ManagedTunnel): Promise<void> {
     this.setStatus(tunnel, 'connected');
     writeLog(tunnel.config.id, tunnel.config.name, 'info', `Tunnel ready on localhost:${tunnel.state.localPort}`);
-
-    const password = tunnel.password!;
-    try {
-      await credentialStore.injectCredential(
-        tunnel.config.id,
-        tunnel.config.name,
-        tunnel.config.username,
-        password,
-        tunnel.state.localPort!
-      );
-    } catch (err: any) {
-      writeLog(tunnel.config.id, tunnel.config.name, 'error', `Credential injection failed: ${err.message}`);
-    }
   }
 
   launchNativeClient(tunnelId: string): void {
     const tunnel = this.registry.get(tunnelId);
-    if (!tunnel || !tunnel.state.localPort) return;
+    if (!tunnel || !tunnel.state.localPort || !tunnel.password) return;
+
+    credentialStore.injectCredential(
+      tunnel.config.id,
+      tunnel.config.name,
+      tunnel.config.username,
+      tunnel.password,
+      tunnel.state.localPort,
+    ).catch((err: any) => {
+      writeLog(tunnel.config.id, tunnel.config.name, 'error', `Credential injection failed: ${err.message}`);
+    });
+
     this.launchRdpClient(tunnel);
   }
 
