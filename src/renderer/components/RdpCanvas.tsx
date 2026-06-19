@@ -41,6 +41,7 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
     if (!ctx) return;
 
     for (const frame of frames) {
+      console.log('[RDP] paint frame', frame.x, frame.y, frame.w, frame.h, frame.data.byteLength);
       const imageData = ctx.createImageData(frame.w, frame.h);
       const src = new Uint8ClampedArray(frame.data);
       imageData.data.set(src);
@@ -54,6 +55,7 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
       dst.drawImage(offscreen, 0, 0);
     }
 
+    console.log('[RDP] paint done');
     rafRef.current = 0;
   }, [width, height]);
 
@@ -62,6 +64,7 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
 
     const frameHandler = (id: string, rect: { x: number; y: number; w: number; h: number }, buf: ArrayBuffer) => {
       if (id !== tunnelId) return;
+      console.log('[RDP] frame received', rect.x, rect.y, rect.w, rect.h, buf.byteLength);
       pendingRef.current.push({ ...rect, data: buf });
       if (!rafRef.current) {
         rafRef.current = requestAnimationFrame(paint);
