@@ -26,7 +26,6 @@ mac:
   target:
     - target: dmg
       arch:
-        - x64
         - arm64
   icon: resources/icons/icon.png
   category: public.app-category.utilities

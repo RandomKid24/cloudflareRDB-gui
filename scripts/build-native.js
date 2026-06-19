@@ -113,7 +113,7 @@ if (isWin) {
 
   configArgs = [
     '-DCMAKE_BUILD_TYPE=Release',
-    '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64',
+    '-DCMAKE_OSX_ARCHITECTURES=arm64',
     `-DFREERDP_ROOT=${freerdpRoot}`,
     `-DCMAKE_JS_INC=${nodeInc}`,
     `-DNAPI_DIR=${napiDir}`,
