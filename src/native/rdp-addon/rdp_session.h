@@ -4,6 +4,7 @@
 #include <freerdp/freerdp.h>
 #include <freerdp/client/cmdline.h>
 #include <freerdp/constants.h>
+#include <freerdp/codec/color.h>
 #include <winpr/wtypes.h>
 #include <thread>
 #include <atomic>
@@ -43,6 +44,7 @@ private:
   static BOOL bitmapUpdate(rdpContext* ctx, const BITMAP_UPDATE* bitmap);
   static BOOL surfaceBits(rdpContext* ctx, const SURFACE_BITS_COMMAND* cmd);
   static BOOL desktopResize(rdpContext* ctx);
+  static BOOL postConnectCallback(freerdp* instance);
 
 
   freerdp* instance_ = nullptr;

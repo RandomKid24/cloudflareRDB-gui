@@ -21,6 +21,27 @@ RdpSession::~RdpSession() {
   disconnect();
 }
 
+BOOL RdpSession::postConnectCallback(freerdp* instance) {
+  RdpSession* self = getSelf(instance->context);
+  if (!self) return FALSE;
+
+  // Initialize GDI with the correct pixel format after connection is established
+  if (gdi_init(instance, PIXEL_FORMAT_BGRX32) != TRUE) {
+    self->lastError_ = "gdi_init failed in PostConnect";
+    if (self->listener_) self->listener_->onError(self->lastError_.c_str());
+    return FALSE;
+  }
+
+  // Register update callbacks after GDI is ready
+  self->context_->update->BeginPaint = beginPaint;
+  self->context_->update->EndPaint = endPaint;
+  self->context_->update->BitmapUpdate = bitmapUpdate;
+  self->context_->update->SurfaceBits = surfaceBits;
+  self->context_->update->DesktopResize = desktopResize;
+
+  return TRUE;
+}
+
 bool RdpSession::connect() {
   instance_ = freerdp_new();
   if (!instance_) {
@@ -62,21 +83,8 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
 
-  context_->update->BeginPaint = beginPaint;
-  context_->update->EndPaint = endPaint;
-  context_->update->BitmapUpdate = bitmapUpdate;
-  context_->update->SurfaceBits = surfaceBits;
-  context_->update->DesktopResize = desktopResize;
-
-  if (gdi_init(instance_, 0) != TRUE) {
-    lastError_ = "gdi_init failed";
-    if (listener_) listener_->onError(lastError_.c_str());
-    freerdp_context_free(instance_);
-    freerdp_free(instance_);
-    instance_ = nullptr;
-    context_ = nullptr;
-    return false;
-  }
+  // Register PostConnect callback — gdi_init must happen after connection
+  instance_->PostConnect = postConnectCallback;
 
   BOOL connectResult = freerdp_connect(instance_);
   if (connectResult != TRUE) {
@@ -90,7 +98,6 @@ bool RdpSession::connect() {
     }
     lastError_ = buf;
     if (listener_) listener_->onError(lastError_.c_str());
-    gdi_free(instance_);
     freerdp_context_free(instance_);
     freerdp_free(instance_);
     instance_ = nullptr;
