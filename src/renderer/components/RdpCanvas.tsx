@@ -15,6 +15,27 @@ interface Props {
   connected: boolean;
 }
 
+// RDP Slow-Path Pointer Event flags (MS-RDPBCGR 2.2.8.1.1.3.1.1.3)
+const PTR_FLAGS_MOVE = 0x0800;
+const PTR_FLAGS_DOWN = 0x8000;
+const PTR_FLAGS_BUTTON1 = 0x1000;
+const PTR_FLAGS_BUTTON2 = 0x2000;
+const PTR_FLAGS_BUTTON3 = 0x4000;
+const PTR_FLAGS_WHEEL = 0x0200;
+const PTR_FLAGS_WHEEL_NEGATIVE = 0x0100;
+
+function buttonToDownFlag(button: number): number {
+  if (button === 2) return PTR_FLAGS_BUTTON2 | PTR_FLAGS_DOWN;
+  if (button === 1) return PTR_FLAGS_BUTTON3 | PTR_FLAGS_DOWN;
+  return PTR_FLAGS_BUTTON1 | PTR_FLAGS_DOWN;
+}
+
+function buttonToUpFlag(button: number): number {
+  if (button === 2) return PTR_FLAGS_BUTTON2;
+  if (button === 1) return PTR_FLAGS_BUTTON3;
+  return PTR_FLAGS_BUTTON1;
+}
+
 export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
@@ -121,30 +142,29 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     mouseDownRef.current = true;
     const pos = getCanvasPos(e);
-    let flags = 0x0001;
-    if (e.button === 2) flags = 0x0002;
-    else if (e.button === 1) flags = 0x0004;
+    const flags = buttonToDownFlag(e.button);
     window.cloudflareRdp.rdp.sendMouse(tunnelId, flags, pos.x, pos.y);
   }, [tunnelId, getCanvasPos]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     mouseDownRef.current = false;
     const pos = getCanvasPos(e);
-    let flags = 0x0000;
-    if (e.button === 2) flags = 0x0002;
-    else if (e.button === 1) flags = 0x0004;
+    const flags = buttonToUpFlag(e.button);
     window.cloudflareRdp.rdp.sendMouse(tunnelId, flags, pos.x, pos.y);
   }, [tunnelId, getCanvasPos]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const pos = getCanvasPos(e);
-    const flags = 0x0001 | (mouseDownRef.current ? 0x8000 : 0);
+    const flags = PTR_FLAGS_MOVE;
     window.cloudflareRdp.rdp.sendMouse(tunnelId, flags, pos.x, pos.y);
   }, [tunnelId, getCanvasPos]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     const pos = getCanvasPos(e);
-    const flags = e.deltaY > 0 ? 0x0200 : 0x0080;
+    const amount = Math.min(Math.abs(Math.round(e.deltaY)), 0x001F) || 1;
+    const flags = PTR_FLAGS_WHEEL
+      | (e.deltaY > 0 ? PTR_FLAGS_WHEEL_NEGATIVE : 0)
+      | amount;
     window.cloudflareRdp.rdp.sendMouse(tunnelId, flags, pos.x, pos.y);
   }, [tunnelId, getCanvasPos]);
 

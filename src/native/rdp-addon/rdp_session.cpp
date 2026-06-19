@@ -138,6 +138,7 @@ void RdpSession::disconnect() {
 void RdpSession::pump() {
   fprintf(stderr, "[RDP] pump started, shall_disconnect=%d\n", freerdp_shall_disconnect(instance_));
   fflush(stderr);
+  int consecutiveFailures = 0;
   while (running_ && connected_) {
     HANDLE handles[64];
     DWORD ncount = freerdp_get_event_handles(context_, handles, 64);
@@ -154,13 +155,28 @@ void RdpSession::pump() {
 
     if (!freerdp_check_event_handles(context_)) {
       int shall = freerdp_shall_disconnect(instance_);
-      fprintf(stderr, "[RDP] pump: check_event_handles failed, shall_disconnect=%d\n", shall);
+      UINT32 err = freerdp_get_last_error(context_);
+      const char* errStr = freerdp_get_last_error_string(err);
+      fprintf(stderr, "[RDP] pump: check_event_handles failed, shall_disconnect=%d, last_error=%u (%s)\n",
+              shall, err, errStr ? errStr : "unknown");
       fflush(stderr);
+
       if (shall) {
         if (listener_) listener_->onDisconnect("RDP server disconnected");
         connected_ = false;
         break;
       }
+
+      consecutiveFailures++;
+      if (consecutiveFailures > 50) {
+        fprintf(stderr, "[RDP] pump: too many consecutive failures, forcing disconnect\n");
+        fflush(stderr);
+        if (listener_) listener_->onDisconnect("RDP pump stalled");
+        connected_ = false;
+        break;
+      }
+    } else {
+      consecutiveFailures = 0;
     }
 #ifdef _WIN32
     Sleep(10);
