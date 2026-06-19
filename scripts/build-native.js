@@ -33,7 +33,7 @@ const fetchResult = spawnSync(process.execPath, [
 
 if (fetchResult.status !== 0) {
   console.log('Failed to fetch Electron headers — skipping');
-  process.exit(0);
+  process.exit(1);
 }
 
 const cmakeJsHome = path.join(
@@ -73,9 +73,23 @@ if (cmakeCheck.status !== 0) {
 console.log(`  cmake: ${cmakeCheck.stdout.split('\n')[0]}`);
 
 // Configure
+const configArgs = [
+  '-G', 'Visual Studio 18 2026',
+  '-A', 'x64',
+  `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`,
+  `-DCMAKE_BUILD_TYPE=Release`,
+  `-DCMAKE_JS_INC=${nodeInc}`,
+  `-DCMAKE_JS_LIB=${nodeLib}`,
+  `-DCMAKE_JS_SRC=${winDelayHook.replace(/\\/g, '/')}`,
+  `-DNODE_RUNTIME=electron`,
+  `-DNODE_RUNTIMEVERSION=${ELECTRON_VERSION}`,
+  `-DNODE_ARCH=x64`,
+  `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded`,
+  `-DCMAKE_SHARED_LINKER_FLAGS=/DELAYLOAD:NODE.EXE`,
+  srcDir,
+];
 console.log('Running cmake configure...');
 console.log(`  Args: ${configArgs.join(' ')}`);
-const configArgs = [
   '-G', 'Visual Studio 18 2026',
   '-A', 'x64',
   `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`,
