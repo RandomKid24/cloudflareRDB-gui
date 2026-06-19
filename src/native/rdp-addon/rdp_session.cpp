@@ -33,9 +33,13 @@ BOOL RdpSession::postConnectCallback(freerdp* instance) {
 
   fprintf(stderr, "[RDP] gdi_init OK, primary_buffer=%p\n", (void*)instance->context->gdi->primary_buffer);
 
+  fprintf(stderr, "[RDP] registering callbacks via context_->update (%p)\n", (void*)self->context_->update);
   self->context_->update->BeginPaint = beginPaint;
   self->context_->update->EndPaint = endPaint;
   self->context_->update->DesktopResize = desktopResize;
+  fprintf(stderr, "[RDP] callbacks set: EndPaint=%p, DesktopResize=%p\n",
+          (void*)self->context_->update->EndPaint,
+          (void*)self->context_->update->DesktopResize);
 
   return TRUE;
 }
@@ -132,9 +136,27 @@ void RdpSession::disconnect() {
 }
 
 void RdpSession::pump() {
+  fprintf(stderr, "[RDP] pump started, shall_disconnect=%d\n", freerdp_shall_disconnect(instance_));
+  fflush(stderr);
   while (running_ && connected_) {
+    HANDLE handles[64];
+    DWORD ncount = freerdp_get_event_handles(context_, handles, 64);
+    if (ncount == 0) {
+      fprintf(stderr, "[RDP] pump: no event handles\n");
+      fflush(stderr);
+#ifdef _WIN32
+      Sleep(10);
+#else
+      usleep(10000);
+#endif
+      continue;
+    }
+
     if (!freerdp_check_event_handles(context_)) {
-      if (freerdp_shall_disconnect(instance_)) {
+      int shall = freerdp_shall_disconnect(instance_);
+      fprintf(stderr, "[RDP] pump: check_event_handles failed, shall_disconnect=%d\n", shall);
+      fflush(stderr);
+      if (shall) {
         if (listener_) listener_->onDisconnect("RDP server disconnected");
         connected_ = false;
         break;
@@ -146,6 +168,8 @@ void RdpSession::pump() {
     usleep(10000);
 #endif
   }
+  fprintf(stderr, "[RDP] pump exited\n");
+  fflush(stderr);
 }
 
 void RdpSession::sendPointerEvent(int flags, int x, int y) {
