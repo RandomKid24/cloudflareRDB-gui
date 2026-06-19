@@ -100,7 +100,8 @@ jobs:
             -DWITH_CLIENT_MAC=OFF \
             -DWITH_CLIENT_SDL=OFF \
             -DWITH_CLIENT_X11=OFF \
-            -DWITH_CLIENT_HEADLESS=OFF
+            -DWITH_CLIENT_HEADLESS=OFF \
+            -DWITH_WINPR_TOOLS=OFF
           cmake --build build -j$(sysctl -n hw.logicalcpu) --target freerdp --target freerdp-client --target winpr
           sudo cmake --install build --prefix /usr/local/freerdp2
           # Remove the source to save disk space
