@@ -12,21 +12,21 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_path(FREERDP_INCLUDE_DIR freerdp/freerdp.h
   HINTS ${FREERDP_ROOT}
-  PATH_SUFFIXES include include/freerdp2)
+  PATH_SUFFIXES include include/freerdp2 include/freerdp3)
 
 find_path(WINPR_INCLUDE_DIR winpr/winpr.h
   HINTS ${FREERDP_ROOT}
-  PATH_SUFFIXES include include/winpr2)
+  PATH_SUFFIXES include include/winpr2 include/winpr3)
 
-find_library(FREERDP_LIBRARY NAMES freerdp2 freerdp
+find_library(FREERDP_LIBRARY NAMES freerdp3 freerdp2 freerdp
   HINTS ${FREERDP_ROOT}
   PATH_SUFFIXES lib)
 
-find_library(FREERDP_CLIENT_LIBRARY NAMES freerdp-client2 freerdp-client
+find_library(FREERDP_CLIENT_LIBRARY NAMES freerdp-client3 freerdp-client2 freerdp-client
   HINTS ${FREERDP_ROOT}
   PATH_SUFFIXES lib)
 
-find_library(WINPR_LIBRARY NAMES winpr2 winpr
+find_library(WINPR_LIBRARY NAMES winpr3 winpr2 winpr
   HINTS ${FREERDP_ROOT}
   PATH_SUFFIXES lib)
 

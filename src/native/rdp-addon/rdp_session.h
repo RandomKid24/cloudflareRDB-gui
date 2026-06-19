@@ -31,6 +31,7 @@ public:
   bool connect();
   void disconnect();
   bool isConnected() const { return connected_; }
+  const std::string& lastError() const { return lastError_; }
 
   void sendPointerEvent(int flags, int x, int y);
   void sendKeyboardEvent(int flags, UINT16 code);
@@ -51,6 +52,7 @@ private:
   std::atomic<bool> running_{false};
   RdpFrameListener* listener_ = nullptr;
 
+  std::string lastError_;
   std::string host_;
   int port_;
   int width_;

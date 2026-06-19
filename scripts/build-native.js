@@ -22,11 +22,12 @@ try {
 // Download Electron headers
 console.log('Fetching Electron headers...');
 {
+  const arch = isMac ? 'arm64' : 'x64';
   const r = spawnSync(process.execPath, [
     cmakeJsBin, 'install',
     '--runtime=electron',
     `--runtime-version=${ELECTRON_VERSION}`,
-    '--arch=x64',
+    `--arch=${arch}`,
   ], { cwd: srcDir, stdio: 'inherit', env: { ...process.env } });
   if (r.status !== 0) {
     console.log('Failed to fetch Electron headers — skipping');
@@ -36,7 +37,7 @@ console.log('Fetching Electron headers...');
 
 const cmakeJsHome = path.join(
   process.env.HOME || process.env.USERPROFILE,
-  '.cmake-js', 'electron-x64', `v${ELECTRON_VERSION}`
+  '.cmake-js', `electron-${isMac ? 'arm64' : 'x64'}`, `v${ELECTRON_VERSION}`
 );
 const nodeInc = path.join(cmakeJsHome, 'include', 'node');
 const napiDir = path.resolve(__dirname, '..', 'node_modules', 'node-addon-api');
@@ -59,14 +60,14 @@ fs.mkdirSync(addonOutDir, { recursive: true });
 }
 
 // ---------------------------------------------------------------
-// Platform-specific cmake configuration
+// Determine FreeRDP root (shared between cmake config and dylib copy)
 // ---------------------------------------------------------------
-let configArgs;
+let platformFreerdpRoot = process.env.FREERDP_ROOT;
 
 if (isWin) {
   // ---- Windows: vcpkg + Visual Studio ----
   const vcpkgRoot = process.env.VCPKG_ROOT || process.env.VCPKG_INSTALLATION_ROOT || 'C:\\vcpkg';
-  const freerdpRoot = process.env.FREERDP_ROOT || path.join(vcpkgRoot, 'installed', 'x64-windows');
+  const freerdpRoot = platformFreerdpRoot || path.join(vcpkgRoot, 'installed', 'x64-windows');
   const toolchain = path.join(vcpkgRoot, 'scripts', 'buildsystems', 'vcpkg.cmake').replace(/\\/g, '/');
   const nodeLib = path.join(cmakeJsHome, 'x64', 'node.lib');
   const winDelayHook = path.resolve(__dirname, '..', 'node_modules', 'cmake-js', 'lib', 'cpp', 'win_delay_load_hook.cc');
@@ -97,24 +98,25 @@ if (isWin) {
 
 } else if (isMac) {
   // ---- macOS: Homebrew FreeRDP ----
-  let freerdpRoot = process.env.FREERDP_ROOT;
-  if (!freerdpRoot) {
-    freerdpRoot = '/usr/local/opt/freerdp';
+  if (!platformFreerdpRoot) {
     const brewResult = spawnSync('brew', ['--prefix', 'freerdp'], { encoding: 'utf8' });
     if (brewResult.status === 0) {
-      freerdpRoot = brewResult.stdout.trim();
+      platformFreerdpRoot = brewResult.stdout.trim();
+    } else {
+      platformFreerdpRoot = '/usr/local/opt/freerdp';
     }
   }
-  if (!fs.existsSync(path.join(freerdpRoot, 'include', 'freerdp2', 'freerdp', 'freerdp.h')) &&
-      !fs.existsSync(path.join(freerdpRoot, 'include', 'freerdp', 'freerdp.h'))) {
-    console.error(`FreeRDP not found at ${freerdpRoot}. Install with: brew install freerdp`);
+  if (!fs.existsSync(path.join(platformFreerdpRoot, 'include', 'freerdp2', 'freerdp', 'freerdp.h')) &&
+      !fs.existsSync(path.join(platformFreerdpRoot, 'include', 'freerdp3', 'freerdp', 'freerdp.h')) &&
+      !fs.existsSync(path.join(platformFreerdpRoot, 'include', 'freerdp', 'freerdp.h'))) {
+    console.error(`FreeRDP not found at ${platformFreerdpRoot}. Install with: brew install freerdp`);
     process.exit(1);
   }
 
   configArgs = [
     '-DCMAKE_BUILD_TYPE=Release',
     '-DCMAKE_OSX_ARCHITECTURES=arm64',
-    `-DFREERDP_ROOT=${freerdpRoot}`,
+    `-DFREERDP_ROOT=${platformFreerdpRoot}`,
     `-DCMAKE_JS_INC=${nodeInc}`,
     `-DNAPI_DIR=${napiDir}`,
     `-DCMAKE_SHARED_LINKER_FLAGS=-undefined dynamic_lookup`,
@@ -125,7 +127,9 @@ if (isWin) {
 
 } else {
   // ---- Linux: system FreeRDP (apt) ----
-  const freerdpRoot = process.env.FREERDP_ROOT || '/usr';
+  if (!platformFreerdpRoot) {
+    platformFreerdpRoot = '/usr';
+  }
   if (!fs.existsSync('/usr/include/freerdp2/freerdp/freerdp.h') &&
       !fs.existsSync('/usr/include/freerdp/freerdp.h')) {
     console.error('FreeRDP headers not found. Install with: sudo apt-get install freerdp2-dev');
@@ -134,7 +138,7 @@ if (isWin) {
 
   configArgs = [
     '-DCMAKE_BUILD_TYPE=Release',
-    `-DFREERDP_ROOT=${freerdpRoot}`,
+    `-DFREERDP_ROOT=${platformFreerdpRoot}`,
     `-DCMAKE_JS_INC=${nodeInc}`,
     `-DNAPI_DIR=${napiDir}`,
     `-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--unresolved-symbols=ignore-all`,
@@ -204,10 +208,36 @@ if (isWin) {
 
 if (isMac) {
   // Copy FreeRDP dylibs alongside the addon, fix rpath to use @loader_path
-  const freerdpRoot = process.env.FREERDP_ROOT;
-  if (freerdpRoot) {
-    const libDir = path.join(freerdpRoot, 'lib');
-    const dylibs = ['libfreerdp2.2.dylib', 'libfreerdp-client2.2.dylib', 'libwinpr2.2.dylib'];
+  if (platformFreerdpRoot) {
+    const libDir = path.join(platformFreerdpRoot, 'lib');
+    // Try FreeRDP 3 names first, fall back to FreeRDP 2
+    const dylibCandidates = [
+      ['libfreerdp3.3.dylib', 'libfreerdp-client3.3.dylib', 'libwinpr3.3.dylib'],
+      ['libfreerdp2.2.dylib', 'libfreerdp-client2.2.dylib', 'libwinpr2.2.dylib'],
+    ];
+    let dylibs;
+    for (const candidate of dylibCandidates) {
+      if (candidate.every(d => fs.existsSync(path.join(libDir, d)))) {
+        dylibs = candidate;
+        break;
+      }
+    }
+    if (!dylibs) {
+      // fall back to realpath-based detection
+      const found = [];
+      for (const d of fs.readdirSync(libDir)) {
+        if (d.endsWith('.dylib') && (d.startsWith('libfreerdp') || d.startsWith('libwinpr'))) {
+          found.push(d);
+        }
+      }
+      if (found.length > 0) {
+        dylibs = found;
+        console.warn(`  Guessing dylibs from lib dir: ${found.join(', ')}`);
+      } else {
+        console.error('  No FreeRDP dylibs found in ' + libDir);
+        process.exit(1);
+      }
+    }
     // Copy FreeRDP dylibs
     for (const dylib of dylibs) {
       const src = path.join(libDir, dylib);

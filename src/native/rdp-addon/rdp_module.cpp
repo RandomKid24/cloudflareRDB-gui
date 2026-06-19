@@ -111,9 +111,12 @@ static Napi::Value CreateSession(const Napi::CallbackInfo& info) {
 
   bool ok = session->connect();
   if (!ok) {
+    std::string err = session->lastError().empty()
+      ? "Failed to connect RDP session"
+      : session->lastError();
     delete session;
     delete listener;
-    Napi::Error::New(env, "Failed to connect RDP session").ThrowAsJavaScriptException();
+    Napi::Error::New(env, err).ThrowAsJavaScriptException();
     return env.Null();
   }
 

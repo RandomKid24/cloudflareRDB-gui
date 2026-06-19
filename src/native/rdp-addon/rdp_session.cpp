@@ -24,7 +24,8 @@ RdpSession::~RdpSession() {
 bool RdpSession::connect() {
   instance_ = freerdp_new();
   if (!instance_) {
-    if (listener_) listener_->onError("freerdp_new failed");
+    lastError_ = "freerdp_new failed";
+    if (listener_) listener_->onError(lastError_.c_str());
     return false;
   }
 
@@ -33,16 +34,16 @@ bool RdpSession::connect() {
   instance_->ContextFree = nullptr;
 
   if (freerdp_context_new(instance_) != TRUE) {
-    if (listener_) listener_->onError("freerdp_context_new failed");
+    lastError_ = "freerdp_context_new failed";
+    if (listener_) listener_->onError(lastError_.c_str());
     freerdp_free(instance_);
     instance_ = nullptr;
     return false;
   }
   context_ = instance_->context;
-  context_->instance = instance_;
   ((RdpSessionContext*)context_)->session = this;
 
-  rdpSettings* settings = instance_->settings;
+  rdpSettings* settings = context_->settings;
   freerdp_settings_set_string(settings, FreeRDP_ServerHostname, host_.c_str());
   freerdp_settings_set_uint32(settings, FreeRDP_ServerPort, port_);
   freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, width_);
@@ -61,7 +62,6 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
 
-
   context_->update->BeginPaint = beginPaint;
   context_->update->EndPaint = endPaint;
   context_->update->BitmapUpdate = bitmapUpdate;
@@ -69,7 +69,8 @@ bool RdpSession::connect() {
   context_->update->DesktopResize = desktopResize;
 
   if (gdi_init(instance_, 0) != TRUE) {
-    if (listener_) listener_->onError("gdi_init failed");
+    lastError_ = "gdi_init failed";
+    if (listener_) listener_->onError(lastError_.c_str());
     freerdp_context_free(instance_);
     freerdp_free(instance_);
     instance_ = nullptr;
@@ -77,8 +78,19 @@ bool RdpSession::connect() {
     return false;
   }
 
-  if (freerdp_connect(instance_) != TRUE) {
-    if (listener_) listener_->onError("freerdp_connect failed");
+  BOOL connectResult = freerdp_connect(instance_);
+  if (connectResult != TRUE) {
+    UINT32 lastError = freerdp_get_last_error(context_);
+    const char* errorStr = freerdp_get_last_error_string(lastError);
+    char buf[256];
+    if (errorStr) {
+      snprintf(buf, sizeof(buf), "freerdp_connect failed: code=%u (%s)", lastError, errorStr);
+    } else {
+      snprintf(buf, sizeof(buf), "freerdp_connect failed: code=%u", lastError);
+    }
+    lastError_ = buf;
+    if (listener_) listener_->onError(lastError_.c_str());
+    gdi_free(instance_);
     freerdp_context_free(instance_);
     freerdp_free(instance_);
     instance_ = nullptr;
@@ -124,11 +136,11 @@ void RdpSession::pump() {
       break;
     }
 
-    int wstatus = freerdp_get_last_error(context_);
+    UINT32 wstatus = freerdp_get_last_error(context_);
     if (wstatus != FREERDP_ERROR_SUCCESS) {
       if (running_) {
         char buf[128];
-        snprintf(buf, sizeof(buf), "RDP error: code=%d", wstatus);
+        snprintf(buf, sizeof(buf), "RDP error: code=%u", wstatus);
         if (listener_) listener_->onError(buf);
         connected_ = false;
       }
@@ -140,13 +152,13 @@ void RdpSession::pump() {
 }
 
 void RdpSession::sendPointerEvent(int flags, int x, int y) {
-  if (!connected_ || !instance_) return;
-  freerdp_input_send_mouse_event(instance_->input, flags, x, y);
+  if (!connected_ || !context_) return;
+  freerdp_input_send_mouse_event(context_->input, (UINT16)flags, (UINT16)x, (UINT16)y);
 }
 
 void RdpSession::sendKeyboardEvent(int flags, UINT16 code) {
-  if (!connected_ || !instance_) return;
-  freerdp_input_send_keyboard_event(instance_->input, flags, code);
+  if (!connected_ || !context_) return;
+  freerdp_input_send_keyboard_event(context_->input, (UINT16)flags, (UINT8)code);
 }
 
 void RdpSession::resize(int width, int height) {
@@ -205,12 +217,10 @@ BOOL RdpSession::desktopResize(rdpContext* ctx) {
   RdpSession* self = getSelf(ctx);
   if (!self || !self->listener_) return TRUE;
 
-  rdpSettings* settings = ctx->instance->settings;
+  rdpSettings* settings = ctx->settings;
   int newW = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
   int newH = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
 
   self->listener_->onResize(newW, newH);
   return TRUE;
 }
-
-
