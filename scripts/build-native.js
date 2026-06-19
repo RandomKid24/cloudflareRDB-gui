@@ -113,13 +113,13 @@ if (isWin) {
 
   configArgs = [
     '-DCMAKE_BUILD_TYPE=Release',
+    '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64',
     `-DFREERDP_ROOT=${freerdpRoot}`,
     `-DCMAKE_JS_INC=${nodeInc}`,
     `-DNAPI_DIR=${napiDir}`,
     `-DCMAKE_SHARED_LINKER_FLAGS=-undefined dynamic_lookup`,
     `-DNODE_RUNTIME=electron`,
     `-DNODE_RUNTIMEVERSION=${ELECTRON_VERSION}`,
-    `-DNODE_ARCH=x64`,
     srcDir,
   ];
 
