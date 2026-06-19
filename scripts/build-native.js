@@ -77,6 +77,8 @@ const configArgs = [
   '-G', 'Visual Studio 18 2026',
   '-A', 'x64',
   `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`,
+  `-DVCPKG_TARGET_TRIPLET=x64-windows`,
+  `-DVCPKG_INSTALLED_DIR=C:/vcpkg/installed`,
   `-DCMAKE_BUILD_TYPE=Release`,
   `-DCMAKE_JS_INC=${nodeInc}`,
   `-DCMAKE_JS_LIB=${nodeLib}`,
