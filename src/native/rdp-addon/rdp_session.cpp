@@ -190,14 +190,14 @@ BOOL RdpSession::surfaceBits(rdpContext* ctx, const SURFACE_BITS_COMMAND* cmd) {
   RdpSession* self = getSelf(ctx);
   if (!self || !self->listener_) return TRUE;
 
-  int w = cmd->destRight - cmd->destLeft;
-  int h = cmd->destBottom - cmd->destTop;
+  int w = cmd->bmp.width;
+  int h = cmd->bmp.height;
 
-  if (w <= 0 || h <= 0 || !cmd->bmp.pixelData || cmd->bmp.pixelDataLength <= 0)
+  if (w <= 0 || h <= 0 || !cmd->bmp.bitmapData || cmd->bmp.bitmapDataLength <= 0)
     return TRUE;
 
   self->listener_->onBitmapUpdate(cmd->destLeft, cmd->destTop, w, h,
-    cmd->bmp.pixelData, cmd->bmp.pixelDataLength);
+    cmd->bmp.bitmapData, cmd->bmp.bitmapDataLength);
   return TRUE;
 }
 
