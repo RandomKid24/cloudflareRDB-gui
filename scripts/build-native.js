@@ -90,20 +90,6 @@ const configArgs = [
 ];
 console.log('Running cmake configure...');
 console.log(`  Args: ${configArgs.join(' ')}`);
-  '-G', 'Visual Studio 18 2026',
-  '-A', 'x64',
-  `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`,
-  `-DCMAKE_BUILD_TYPE=Release`,
-  `-DCMAKE_JS_INC=${nodeInc}`,
-  `-DCMAKE_JS_LIB=${nodeLib}`,
-  `-DCMAKE_JS_SRC=${winDelayHook.replace(/\\/g, '/')}`,
-  `-DNODE_RUNTIME=electron`,
-  `-DNODE_RUNTIMEVERSION=${ELECTRON_VERSION}`,
-  `-DNODE_ARCH=x64`,
-  `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded`,
-  `-DCMAKE_SHARED_LINKER_FLAGS=/DELAYLOAD:NODE.EXE`,
-  srcDir,
-];
 
 const configResult = spawnSync('cmake', configArgs, {
   cwd: buildDir,
