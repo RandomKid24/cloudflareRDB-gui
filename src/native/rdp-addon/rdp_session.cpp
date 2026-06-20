@@ -97,6 +97,9 @@ bool RdpSession::connect() {
 #endif
 
   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
+#ifdef _WIN32
+  freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
+#endif
   freerdp_settings_set_bool(settings, FreeRDP_Authentication, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_NSCodec, TRUE);
