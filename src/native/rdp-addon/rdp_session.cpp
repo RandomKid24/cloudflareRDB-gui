@@ -94,16 +94,9 @@ bool RdpSession::connect() {
       free(parsedDomain);
     }
   }
+#endif
 
   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
-  freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
-  freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
-  freerdp_settings_set_bool(settings, FreeRDP_DisableCredentialsDelegation, TRUE);
-  fprintf(stderr, "[RDP] Windows: Nla=TRUE Tls=TRUE Rdp=TRUE DisableCredDelegation=TRUE\n");
-  fflush(stderr);
-#else
-  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
-#endif
   freerdp_settings_set_bool(settings, FreeRDP_Authentication, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_NSCodec, TRUE);
