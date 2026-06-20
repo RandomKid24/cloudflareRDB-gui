@@ -111,15 +111,25 @@ bool RdpSession::connect() {
   WLog_SetLogLevel(WLog_Get("com.freerdp.core.nla"), WLOG_DEBUG);
   WLog_SetLogLevel(WLog_Get("com.freerdp.core.transport"), WLOG_DEBUG);
 
+  const char* actualHost = freerdp_settings_get_string(settings, FreeRDP_ServerHostname);
+  UINT32 actualPort = freerdp_settings_get_uint32(settings, FreeRDP_ServerPort);
+  fprintf(stderr, "[RDP] freerdp_connect: host='%s' port=%u\n",
+          actualHost ? actualHost : "(null)", actualPort);
+  fflush(stderr);
+
   BOOL connectResult = freerdp_connect(instance_);
   if (connectResult != TRUE) {
     UINT32 lastError = freerdp_get_last_error(context_);
     const char* errorStr = freerdp_get_last_error_string(lastError);
     char buf[256];
     if (errorStr) {
-      snprintf(buf, sizeof(buf), "freerdp_connect failed: code=%u (%s)", lastError, errorStr);
+      snprintf(buf, sizeof(buf), "freerdp_connect failed: code=%u (%s) [host='%s' port=%u]",
+               lastError, errorStr,
+               actualHost ? actualHost : "null", actualPort);
     } else {
-      snprintf(buf, sizeof(buf), "freerdp_connect failed: code=%u", lastError);
+      snprintf(buf, sizeof(buf), "freerdp_connect failed: code=%u [host='%s' port=%u]",
+               lastError,
+               actualHost ? actualHost : "null", actualPort);
     }
     lastError_ = buf;
     if (listener_) listener_->onError(lastError_.c_str());
