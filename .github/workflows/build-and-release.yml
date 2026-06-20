@@ -116,16 +116,8 @@ jobs:
           $vcpkgRoot = "C:\vcpkg"
           echo "VCPKG_INSTALLATION_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-          Write-Host "=== Pinning freerdp port to 2.11.2 ==="
-          pushd "$vcpkgRoot"
-          git checkout 389178885d7060149235e37f9ef005265f9d0d22 -- ports/freerdp
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "git checkout failed, continuing with current port files"
-          }
-          popd
-
-          Write-Host "=== Installing FreeRDP via vcpkg ==="
-          & "$vcpkgRoot\vcpkg" install freerdp:x64-windows --no-binarycaching --classic
+          Write-Host "=== Installing FreeRDP via vcpkg overlay (WITH_NATIVE_SSPI=OFF) ==="
+          & "$vcpkgRoot\vcpkg" install freerdp:x64-windows --no-binarycaching --classic --overlay-ports="${{ github.workspace }}\vcpkg-overlay\ports"
           if ($LASTEXITCODE -ne 0) {
             Write-Host "vcpkg install failed!"
             exit 1
