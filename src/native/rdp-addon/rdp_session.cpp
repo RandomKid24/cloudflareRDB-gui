@@ -1,6 +1,7 @@
 #include "rdp_session.h"
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/input.h>
+#include <winpr/wlog.h>
 
 struct RdpSessionContext {
   rdpContext _ctx;
@@ -79,9 +80,27 @@ bool RdpSession::connect() {
     freerdp_settings_set_string(settings, FreeRDP_Password, password_.c_str());
 
 #ifdef _WIN32
+  {
+    char* parsedUser = nullptr;
+    char* parsedDomain = nullptr;
+    if (freerdp_parse_username(username_.c_str(), &parsedUser, &parsedDomain)) {
+      if (parsedDomain && strlen(parsedDomain) > 0) {
+        freerdp_settings_set_string(settings, FreeRDP_Username, parsedUser);
+        freerdp_settings_set_string(settings, FreeRDP_Domain, parsedDomain);
+        fprintf(stderr, "[RDP] parsed domain='%s' user='%s' from username='%s'\n",
+                parsedDomain, parsedUser, username_.c_str());
+      }
+      free(parsedUser);
+      free(parsedDomain);
+    }
+  }
+
   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
+  freerdp_settings_set_bool(settings, FreeRDP_DisableCredentialsDelegation, TRUE);
+  fprintf(stderr, "[RDP] Windows: Nla=TRUE Tls=TRUE Rdp=TRUE DisableCredDelegation=TRUE\n");
+  fflush(stderr);
 #else
   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
 #endif
@@ -92,6 +111,9 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
 
   instance_->PostConnect = postConnectCallback;
+
+  WLog_SetLogLevel(WLog_Get("com.freerdp.core.nla"), WLOG_DEBUG);
+  WLog_SetLogLevel(WLog_Get("com.freerdp.core.transport"), WLOG_DEBUG);
 
   BOOL connectResult = freerdp_connect(instance_);
   if (connectResult != TRUE) {
