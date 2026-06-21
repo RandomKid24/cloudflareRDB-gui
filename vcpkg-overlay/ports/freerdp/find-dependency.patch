@@ -41,3 +41,4 @@ index 1eb11e0..9b6f24c 100644
 +find_dependency(FreeRDP-Server @FREERDP_VERSION@)
  
  @PACKAGE_INIT@
+ 

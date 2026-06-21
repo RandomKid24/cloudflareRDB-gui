@@ -2,8 +2,7 @@ diff --git a/CMakeCPack.cmake b/CMakeCPack.cmake
 index 6ccfc7d..75479bf 100644
 --- a/CMakeCPack.cmake
 +++ b/CMakeCPack.cmake
-@@ -64,9 +64,9 @@ if(MSVC)
- 	if(MSVC_RUNTIME STREQUAL "dynamic")
+@@ -67,9 +67,9 @@ if(MSVC)
  		set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
  		include(InstallRequiredSystemLibraries)
  
@@ -15,3 +14,4 @@ index 6ccfc7d..75479bf 100644
 +		# 	COMPONENT libraries)
  	endif()
  endif()
+ 
