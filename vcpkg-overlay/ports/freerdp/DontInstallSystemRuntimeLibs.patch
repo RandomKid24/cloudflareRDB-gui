@@ -2,7 +2,7 @@ diff --git a/CMakeCPack.cmake b/CMakeCPack.cmake
 index 6ccfc7d..75479bf 100644
 --- a/CMakeCPack.cmake
 +++ b/CMakeCPack.cmake
-@@ -64,10 +64,10 @@ if(MSVC)
+@@ -64,9 +64,9 @@ if(MSVC)
  	if(MSVC_RUNTIME STREQUAL "dynamic")
  		set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
  		include(InstallRequiredSystemLibraries)
