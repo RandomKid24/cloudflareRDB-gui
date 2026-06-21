@@ -110,6 +110,7 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
   freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, FALSE);
+  freerdp_settings_set_uint32(settings, FreeRDP_RequestedProtocols, 1); // PROTOCOL_SSL
 
   // Keep ignoring cert since we're going over a loopback tunnel
   freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
