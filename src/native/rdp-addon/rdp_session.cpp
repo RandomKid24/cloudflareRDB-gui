@@ -103,6 +103,11 @@ bool RdpSession::connect() {
       free(parsedUser);
       free(parsedDomain);
     }
+    fprintf(stderr, "[RDP] credentials: username='%s' domain='%s' password_len=%zu\n",
+            freerdp_settings_get_string(settings, FreeRDP_Username),
+            freerdp_settings_get_string(settings, FreeRDP_Domain) ? freerdp_settings_get_string(settings, FreeRDP_Domain) : "",
+            strlen(password_.c_str()));
+    fflush(stderr);
   }
 #endif
 
@@ -125,6 +130,8 @@ bool RdpSession::connect() {
   WLog_SetLogLevel(WLog_Get("com.freerdp.core.tls"), WLOG_DEBUG);
   WLog_SetLogLevel(WLog_Get("com.freerdp.core.nego"), WLOG_DEBUG);
   WLog_SetLogLevel(WLog_Get("com.freerdp.core.transport"), WLOG_DEBUG);
+  WLog_SetLogLevel(WLog_Get("com.freerdp.core.nla"), WLOG_DEBUG);
+  WLog_SetLogLevel(WLog_Get("com.winpr.sspi"), WLOG_DEBUG);
 
   const char* actualHost = freerdp_settings_get_string(settings, FreeRDP_ServerHostname);
   UINT32 actualPort = freerdp_settings_get_uint32(settings, FreeRDP_ServerPort);
