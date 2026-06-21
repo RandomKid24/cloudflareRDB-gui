@@ -74,8 +74,18 @@ bool RdpSession::connect() {
   freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, height_);
   freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 32);
 
-  if (!username_.empty())
-    freerdp_settings_set_string(settings, FreeRDP_Username, username_.c_str());
+  if (username_.empty()) {
+    fprintf(stderr, "[RDP] ERROR: no username provided, cannot authenticate\n");
+    lastError_ = "No username provided for RDP authentication";
+    if (listener_) listener_->onError(lastError_.c_str());
+    freerdp_context_free(instance_);
+    freerdp_free(instance_);
+    instance_ = nullptr;
+    context_ = nullptr;
+    return false;
+  }
+
+  freerdp_settings_set_string(settings, FreeRDP_Username, username_.c_str());
   if (!password_.empty())
     freerdp_settings_set_string(settings, FreeRDP_Password, password_.c_str());
 
@@ -96,21 +106,22 @@ bool RdpSession::connect() {
   }
 #endif
 
-  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
-  freerdp_settings_set_bool(settings, FreeRDP_Authentication, TRUE);
+  // Security: use TLS only, disable NLA and RDP classic
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
+  freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
+  freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, FALSE);
+
+  // Keep ignoring cert since we're going over a loopback tunnel
   freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
+
   freerdp_settings_set_bool(settings, FreeRDP_NSCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
 
-#ifdef _WIN32
-  // Skip credential delegation to bypass loopback policy restrictions
-  freerdp_settings_set_bool(settings, FreeRDP_DisableCredentialsDelegation, TRUE);
-#endif
-
   instance_->PostConnect = postConnectCallback;
 
-  WLog_SetLogLevel(WLog_Get("com.freerdp.core.nla"), WLOG_DEBUG);
+  WLog_SetLogLevel(WLog_Get("com.freerdp.core.tls"), WLOG_DEBUG);
+  WLog_SetLogLevel(WLog_Get("com.freerdp.core.nego"), WLOG_DEBUG);
   WLog_SetLogLevel(WLog_Get("com.freerdp.core.transport"), WLOG_DEBUG);
 
   const char* actualHost = freerdp_settings_get_string(settings, FreeRDP_ServerHostname);
