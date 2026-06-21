@@ -6,41 +6,76 @@
 #ifdef _WIN32
 #include <windows.h>
 
+static void debugLog(const char* msg) {
+  FILE* f = fopen("C:\\Users\\Ady\\Desktop\\rdp-debug.log", "a");
+  if (f) {
+    fprintf(f, "%s\n", msg);
+    fclose(f);
+  }
+}
+
 static void ensureLegacyProvider() {
   HMODULE hMod = NULL;
   if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                          (LPCSTR)&ensureLegacyProvider, &hMod))
+                          (LPCSTR)&ensureLegacyProvider, &hMod)) {
+    debugLog("GET_MODULE_HANDLE_EX failed");
     return;
+  }
 
   char dllPath[MAX_PATH];
-  if (!GetModuleFileNameA(hMod, dllPath, MAX_PATH))
+  if (!GetModuleFileNameA(hMod, dllPath, MAX_PATH)) {
+    debugLog("GetModuleFileNameA failed");
     return;
+  }
 
   std::string dir(dllPath);
   auto pos = dir.find_last_of('\\');
-  if (pos == std::string::npos)
+  if (pos == std::string::npos) {
+    debugLog("find_last_of failed");
     return;
+  }
   dir = dir.substr(0, pos);
   SetEnvironmentVariableA("OPENSSL_MODULES", dir.c_str());
+
+  char envBuf[MAX_PATH];
+  GetEnvironmentVariableA("OPENSSL_MODULES", envBuf, MAX_PATH);
+  debugLog((std::string("OPENSSL_MODULES=") + envBuf).c_str());
+  debugLog((std::string("legacy.dll path=") + dir + "\\legacy.dll").c_str());
+
+  // Check if legacy.dll exists
+  WIN32_FIND_DATAA findData;
+  HANDLE hFind = FindFirstFileA((dir + "\\legacy.dll").c_str(), &findData);
+  if (hFind != INVALID_HANDLE_VALUE) {
+    debugLog("legacy.dll EXISTS in addon dir");
+    FindClose(hFind);
+  } else {
+    debugLog("legacy.dll NOT FOUND in addon dir");
+  }
 
   HMODULE hLib = GetModuleHandleA("libcrypto-3-x64.dll");
   if (!hLib)
     hLib = LoadLibraryA("libcrypto-3-x64.dll");
-  if (!hLib)
+  if (!hLib) {
+    debugLog("libcrypto-3-x64.dll not loaded");
     return;
+  }
+  debugLog("libcrypto-3-x64.dll found");
 
   typedef void* (*OSSL_PROVIDER_load_t)(void*, const char*);
   auto pLoad = (OSSL_PROVIDER_load_t)GetProcAddress(hLib, "OSSL_PROVIDER_load");
-  if (pLoad) {
-    void* provider = pLoad(NULL, "legacy");
-    if (provider) {
-      fprintf(stderr, "[RDP] OpenSSL LEGACY provider loaded successfully from: %s\n", dir.c_str());
-    } else {
-      fprintf(stderr, "[RDP] OpenSSL LEGACY provider failed to load from: %s\n", dir.c_str());
-    }
+  if (!pLoad) {
+    debugLog("OSSL_PROVIDER_load not found in libcrypto");
+    return;
   }
-  fflush(stderr);
+  debugLog("OSSL_PROVIDER_load found, attempting load...");
+
+  void* provider = pLoad(NULL, "legacy");
+  if (provider) {
+    debugLog((std::string("OSSL_PROVIDER_load SUCCESS: LEGACY loaded from ") + dir).c_str());
+  } else {
+    debugLog((std::string("OSSL_PROVIDER_load FAILED from ") + dir).c_str());
+  }
 }
 #endif
 
