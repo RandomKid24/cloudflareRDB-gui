@@ -106,16 +106,14 @@ bool RdpSession::connect() {
   }
 #endif
 
-  // Security: use TLS only, disable NLA and RDP classic
-  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
+  // Security: offer TLS and NLA, let server choose. Server requires HYBRID.
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, FALSE);
-  freerdp_settings_set_uint32(settings, FreeRDP_RequestedProtocols, 1); // PROTOCOL_SSL
 
   // Keep ignoring cert since we're going over a loopback tunnel
   freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
 
-  // Enable credential-based login over the TLS channel
   freerdp_settings_set_bool(settings, FreeRDP_Authentication, TRUE);
 
   freerdp_settings_set_bool(settings, FreeRDP_NSCodec, TRUE);
