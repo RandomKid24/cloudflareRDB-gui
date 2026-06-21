@@ -33,32 +33,34 @@ export class CredentialStore {
       return;
     }
 
-    return new Promise((resolve, reject) => {
-      const target = `TERMSRV/localhost:${port}`;
-      const proc = spawn('cmdkey', [
-        '/generic:' + target,
-        '/user:' + username,
-        '/pass:' + password,
-      ], {
-        stdio: 'pipe',
-        windowsHide: true,
+    const targets = [`TERMSRV/localhost:${port}`, `TERMSRV/127.0.0.1:${port}`];
+    for (const target of targets) {
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn('cmdkey', [
+          '/generic:' + target,
+          '/user:' + username,
+          '/pass:' + password,
+        ], {
+          stdio: 'pipe',
+          windowsHide: true,
+        });
+
+        let stderr = '';
+        proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+
+        proc.on('close', (code: number | null) => {
+          if (code === 0) {
+            writeLog(tunnelId, tunnelName, 'info', `Credentials injected for ${target}`);
+            resolve();
+          } else {
+            writeLog(tunnelId, tunnelName, 'error', `cmdkey failed (code ${code}): ${stderr}`);
+            reject(new Error(`cmdkey failed: ${stderr}`));
+          }
+        });
+
+        proc.on('error', (err: any) => reject(err));
       });
-
-      let stderr = '';
-      proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
-
-      proc.on('close', (code) => {
-        if (code === 0) {
-          writeLog(tunnelId, tunnelName, 'info', `Credentials injected for ${target}`);
-          resolve();
-        } else {
-          writeLog(tunnelId, tunnelName, 'error', `cmdkey failed (code ${code}): ${stderr}`);
-          reject(new Error(`cmdkey failed: ${stderr}`));
-        }
-      });
-
-      proc.on('error', (err) => reject(err));
-    });
+    }
   }
 
   async clearCredential(tunnelId: string, tunnelName: string, port: number): Promise<void> {
@@ -67,20 +69,22 @@ export class CredentialStore {
       return;
     }
 
-    return new Promise((resolve) => {
-      const target = `TERMSRV/localhost:${port}`;
-      const proc = spawn('cmdkey', ['/delete:' + target], {
-        stdio: 'pipe',
-        windowsHide: true,
-      });
+    const targets = [`TERMSRV/localhost:${port}`, `TERMSRV/127.0.0.1:${port}`];
+    for (const target of targets) {
+      await new Promise<void>((resolve) => {
+        const proc = spawn('cmdkey', ['/delete:' + target], {
+          stdio: 'pipe',
+          windowsHide: true,
+        });
 
-      proc.on('close', () => {
-        writeLog(tunnelId, tunnelName, 'info', `Cleared credential for ${target}`);
-        resolve();
-      });
+        proc.on('close', () => {
+          writeLog(tunnelId, tunnelName, 'info', `Cleared credential for ${target}`);
+          resolve();
+        });
 
-      proc.on('error', () => resolve());
-    });
+        proc.on('error', () => resolve());
+      });
+    }
   }
 
   isEncryptionAvailable(): boolean {

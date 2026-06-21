@@ -323,6 +323,25 @@ export function RdpView({ tunnel, onBack }: Props) {
 
       {status === 'connected' && (
         <div style={{ flex: 1, position: 'relative' }}>
+          {navigator.userAgent.toLowerCase().includes('win') && (
+            <div style={{
+              position: 'absolute',
+              top: 12,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'rgba(30, 41, 59, 0.85)',
+              backdropFilter: 'blur(4px)',
+              color: '#f8fafc',
+              padding: '6px 12px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              zIndex: 10,
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              pointerEvents: 'none'
+            }}>
+              Enter your Windows credentials in the session window to log in.
+            </div>
+          )}
           <RdpCanvas
             tunnelId={tunnel.id}
             width={DEFAULT_WIDTH}

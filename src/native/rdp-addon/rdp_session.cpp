@@ -103,6 +103,11 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
 
+#ifdef _WIN32
+  // Skip credential delegation to bypass loopback policy restrictions
+  freerdp_settings_set_bool(settings, FreeRDP_DisableCredentialsDelegation, TRUE);
+#endif
+
   instance_->PostConnect = postConnectCallback;
 
   WLog_SetLogLevel(WLog_Get("com.freerdp.core.nla"), WLOG_DEBUG);
