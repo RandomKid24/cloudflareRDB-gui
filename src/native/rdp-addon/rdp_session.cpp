@@ -3,6 +3,47 @@
 #include <freerdp/input.h>
 #include <winpr/wlog.h>
 
+#ifdef _WIN32
+#include <windows.h>
+
+static void ensureLegacyProvider() {
+  HMODULE hMod = NULL;
+  if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                          (LPCSTR)&ensureLegacyProvider, &hMod))
+    return;
+
+  char dllPath[MAX_PATH];
+  if (!GetModuleFileNameA(hMod, dllPath, MAX_PATH))
+    return;
+
+  std::string dir(dllPath);
+  auto pos = dir.find_last_of('\\');
+  if (pos == std::string::npos)
+    return;
+  dir = dir.substr(0, pos);
+  SetEnvironmentVariableA("OPENSSL_MODULES", dir.c_str());
+
+  HMODULE hLib = GetModuleHandleA("libcrypto-3-x64.dll");
+  if (!hLib)
+    hLib = LoadLibraryA("libcrypto-3-x64.dll");
+  if (!hLib)
+    return;
+
+  typedef void* (*OSSL_PROVIDER_load_t)(void*, const char*);
+  auto pLoad = (OSSL_PROVIDER_load_t)GetProcAddress(hLib, "OSSL_PROVIDER_load");
+  if (pLoad) {
+    void* provider = pLoad(NULL, "legacy");
+    if (provider) {
+      fprintf(stderr, "[RDP] OpenSSL LEGACY provider loaded successfully from: %s\n", dir.c_str());
+    } else {
+      fprintf(stderr, "[RDP] OpenSSL LEGACY provider failed to load from: %s\n", dir.c_str());
+    }
+  }
+  fflush(stderr);
+}
+#endif
+
 struct RdpSessionContext {
   rdpContext _ctx;
   RdpSession* session;
@@ -46,6 +87,9 @@ BOOL RdpSession::postConnectCallback(freerdp* instance) {
 }
 
 bool RdpSession::connect() {
+#ifdef _WIN32
+  ensureLegacyProvider();
+#endif
   instance_ = freerdp_new();
   if (!instance_) {
     lastError_ = "freerdp_new failed";

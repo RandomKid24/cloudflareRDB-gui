@@ -146,19 +146,20 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $moduleDirs = @(
+          $searchDirs = @(
             "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\ossl-modules",
             "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin",
             "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib"
           )
-          $targetDir = "native\ossl-modules"
-          New-Item -ItemType Directory -Force -Path $targetDir
+          $targetDir = "native\rdp-addon\build\Release"
+          New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+          Write-Host "Target: $targetDir"
           $copied = $false
-          foreach ($dir in $moduleDirs) {
+          foreach ($dir in $searchDirs) {
             if (Test-Path -LiteralPath $dir) {
               $files = Get-ChildItem -Path $dir -Filter "*legacy*"
               foreach ($f in $files) {
-                Copy-Item -Path $f.FullName -Destination $targetDir
+                Copy-Item -Path $f.FullName -Destination $targetDir -Force
                 Write-Host "Copied: $($f.FullName) -> $targetDir"
                 $copied = $true
               }
@@ -167,8 +168,8 @@ jobs:
           if (-not $copied) {
             Write-Host "WARNING: No LEGACY provider found!"
           }
-          Write-Host "=== ossl-modules contents ==="
-          Get-ChildItem -Path $targetDir -Recurse | Select-Object Name, Length
+          Write-Host "=== rdp-addon DLL dir contents ==="
+          Get-ChildItem -Path $targetDir | Select-Object Name, Length
 
       - name: Build desktop artifacts
         env:

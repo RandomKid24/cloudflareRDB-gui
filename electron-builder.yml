@@ -16,10 +16,6 @@ extraResources:
     to: native/
     filter:
       - "**/*"
-  - from: ${env.VCPKG_INSTALLATION_ROOT}/installed/x64-windows/lib/ossl-modules/
-    to: native/ossl-modules/
-    filter:
-      - "*.dll"
 win:
   target:
     - target: nsis

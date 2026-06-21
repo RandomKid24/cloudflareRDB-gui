@@ -114,12 +114,6 @@ function createTray(): void {
     }
   );
 
-  // Point OpenSSL to the bundled LEGACY provider for MD4 (FreeRDP NLA needs it)
-  if (process.platform === 'win32') {
-    const modulesDir = path.join(process.resourcesPath, 'native', 'ossl-modules');
-    process.env.OPENSSL_MODULES = modulesDir;
-  }
-
   rdpViewManager = new RdpViewManager();
 
   tray.on('click', showMainWindow);
