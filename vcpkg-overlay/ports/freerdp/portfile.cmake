@@ -17,9 +17,26 @@ vcpkg_from_github(
 file(REMOVE "${SOURCE_PATH}/cmake/FindOpenSSL.cmake")
 file(WRITE "${SOURCE_PATH}/.source_version" "${VERSION}-vcpkg")
 
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        client-mac  WITH_CLIENT_MAC
+        ffmpeg      WITH_FFMPEG
+        ffmpeg      WITH_SWSCALE
+        server      WITH_SERVER
+        urbdrc      CHANNEL_URBDRC
+        wayland     WITH_WAYLAND
+        winpr-tools WITH_WINPR_TOOLS
+        x11         WITH_X11
+)
+
+if(NOT "urbdrc" IN_LIST FEATURES)
+    list(APPEND FEATURE_OPTIONS -DCHANNEL_URBDRC=OFF)
+endif()
+
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
+        ${FEATURE_OPTIONS}
         -DWITH_CCACHE=OFF
         -DWITH_CLANG_FORMAT=OFF
         -DWITH_MANPAGES=OFF
