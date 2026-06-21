@@ -114,6 +114,9 @@ bool RdpSession::connect() {
   // Keep ignoring cert since we're going over a loopback tunnel
   freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
 
+  // Enable credential-based login over the TLS channel
+  freerdp_settings_set_bool(settings, FreeRDP_Authentication, TRUE);
+
   freerdp_settings_set_bool(settings, FreeRDP_NSCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
