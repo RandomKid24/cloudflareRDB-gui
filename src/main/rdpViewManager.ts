@@ -31,7 +31,14 @@ export class RdpViewManager {
 
   constructor() {
     try {
-      const addonPath = path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release', 'rdp_addon.node');
+      const addonDir = path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release');
+      const addonPath = path.join(addonDir, 'rdp_addon.node');
+
+      if (isWin) {
+        process.env.PATH = `${addonDir};${process.env.PATH}`;
+        process.env.OPENSSL_MODULES = addonDir;
+      }
+
       this.addon = require(addonPath) as RdpAddon;
       this.addonAvailable = true;
       writeLog('rdp', 'RDP View', 'info', `Native RDP addon loaded from ${addonPath}`);

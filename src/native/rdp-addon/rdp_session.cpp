@@ -7,11 +7,8 @@
 #include <windows.h>
 
 static void debugLog(const char* msg) {
-  FILE* f = fopen("C:\\Users\\Ady\\Desktop\\rdp-debug.log", "a");
-  if (f) {
-    fprintf(f, "%s\n", msg);
-    fclose(f);
-  }
+  fprintf(stderr, "[RDP-addon] %s\n", msg);
+  fflush(stderr);
 }
 
 static void ensureLegacyProvider() {
@@ -61,6 +58,15 @@ static void ensureLegacyProvider() {
     return;
   }
   debugLog("libcrypto-3-x64.dll found");
+
+  typedef int (*OSSL_PROVIDER_set_default_search_path_t)(void*, const char*);
+  auto pSetPath = (OSSL_PROVIDER_set_default_search_path_t)GetProcAddress(hLib, "OSSL_PROVIDER_set_default_search_path");
+  if (pSetPath) {
+    pSetPath(NULL, dir.c_str());
+    debugLog((std::string("OSSL_PROVIDER_set_default_search_path called with ") + dir).c_str());
+  } else {
+    debugLog("OSSL_PROVIDER_set_default_search_path not found in libcrypto");
+  }
 
   typedef void* (*OSSL_PROVIDER_load_t)(void*, const char*);
   auto pLoad = (OSSL_PROVIDER_load_t)GetProcAddress(hLib, "OSSL_PROVIDER_load");
