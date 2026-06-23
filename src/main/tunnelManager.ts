@@ -70,12 +70,13 @@ export class TunnelManager {
     }
 
     const binName = getCloudflaredName();
-    const commonPaths: string[] = [binName];
+    const commonPaths: string[] = [];
 
     if (isWin) {
       commonPaths.push(
         process.env.LOCALAPPDATA + '\\cloudflared\\' + binName,
         process.env.PROGRAMFILES + '\\cloudflared\\' + binName,
+        (process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)') + '\\cloudflared\\' + binName,
       );
     } else if (isMac) {
       commonPaths.push('/usr/local/bin/' + binName, '/opt/homebrew/bin/' + binName);
@@ -91,9 +92,21 @@ export class TunnelManager {
       } catch {}
     }
 
+    // Try finding on system PATH using where/which
+    try {
+      const { execFileSync } = require('child_process');
+      if (isWin) {
+        const p = execFileSync('where', [binName], { encoding: 'utf-8', timeout: 3000 }).split('\n')[0].trim();
+        if (p) return p;
+      } else {
+        const p = execFileSync('which', [binName], { encoding: 'utf-8', timeout: 3000 }).trim();
+        if (p) return p;
+      }
+    } catch {}
+
     const bundled = path.join(process.resourcesPath, binName);
     try {
-      await require('fs/promises').access(bundled);
+      await access(bundled);
       return bundled;
     } catch {
       writeLog('system', 'findCloudflared', 'debug',

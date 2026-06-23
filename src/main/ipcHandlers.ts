@@ -229,6 +229,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
       paths.push(
         process.env.LOCALAPPDATA + '\\cloudflared\\' + binName,
         process.env.PROGRAMFILES + '\\cloudflared\\' + binName,
+        (process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)') + '\\cloudflared\\' + binName,
       );
     } else {
       paths.push('/usr/local/bin/' + binName, '/opt/homebrew/bin/' + binName, '/usr/bin/' + binName);

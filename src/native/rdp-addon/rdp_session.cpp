@@ -190,19 +190,20 @@ bool RdpSession::connect() {
   if (!password_.empty())
     freerdp_settings_set_string(settings, FreeRDP_Password, password_.c_str());
 
-#ifdef _WIN32
   {
     char* parsedUser = nullptr;
     char* parsedDomain = nullptr;
     if (freerdp_parse_username(normUsername.c_str(), &parsedUser, &parsedDomain)) {
-      if (parsedDomain && strlen(parsedDomain) > 0) {
+      if (parsedUser) {
         freerdp_settings_set_string(settings, FreeRDP_Username, parsedUser);
+      }
+      if (parsedDomain && strlen(parsedDomain) > 0) {
         freerdp_settings_set_string(settings, FreeRDP_Domain, parsedDomain);
-        fprintf(stderr, "[RDP] parsed domain='%s' user='%s' from username='%s'\n",
-                parsedDomain, parsedUser, normUsername.c_str());
       } else {
         freerdp_settings_set_string(settings, FreeRDP_Domain, ".");
       }
+      fprintf(stderr, "[RDP] parsed domain='%s' user='%s' from username='%s'\n",
+              parsedDomain ? parsedDomain : "", parsedUser ? parsedUser : "", normUsername.c_str());
       free(parsedUser);
       free(parsedDomain);
     } else {
@@ -214,24 +215,6 @@ bool RdpSession::connect() {
             strlen(password_.c_str()));
     fflush(stderr);
   }
-#else
-  {
-    char* parsedUser = nullptr;
-    char* parsedDomain = nullptr;
-    if (freerdp_parse_username(normUsername.c_str(), &parsedUser, &parsedDomain)) {
-      if (parsedDomain && strlen(parsedDomain) > 0) {
-        freerdp_settings_set_string(settings, FreeRDP_Username, parsedUser);
-        freerdp_settings_set_string(settings, FreeRDP_Domain, parsedDomain);
-      } else {
-        freerdp_settings_set_string(settings, FreeRDP_Domain, ".");
-      }
-      free(parsedUser);
-      free(parsedDomain);
-    } else {
-      freerdp_settings_set_string(settings, FreeRDP_Domain, ".");
-    }
-  }
-#endif
 
   // Security: offer TLS and NLA, let server choose. Server requires HYBRID.
   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
