@@ -94,6 +94,35 @@ static void ensureLegacyProvider() {
 }
 #endif
 
+static DWORD verifyCertificateCallback(freerdp* instance, const char* common_name,
+                                       const char* subject, const char* issuer,
+                                       const char* fingerprint, BOOL host_mismatch) {
+  const char* host = freerdp_settings_get_string(instance->settings, FreeRDP_ServerHostname);
+  if (host && (strcmp(host, "127.0.0.1") == 0 || strcmp(host, "localhost") == 0)) {
+    fprintf(stderr, "[RDP] verifyCertificateCallback: Accepting loopback cert for %s\n", host);
+    fflush(stderr);
+    return 1; // Trust loopback certificate
+  }
+  fprintf(stderr, "[RDP] verifyCertificateCallback: Rejecting non-loopback cert for %s\n", host ? host : "(null)");
+  fflush(stderr);
+  return 0; // Reject others
+}
+
+static DWORD verifyChangedCertificateCallback(freerdp* instance, const char* common_name,
+                                              const char* subject, const char* issuer,
+                                              const char* fingerprint, const char* old_subject,
+                                              const char* old_issuer, const char* old_fingerprint) {
+  const char* host = freerdp_settings_get_string(instance->settings, FreeRDP_ServerHostname);
+  if (host && (strcmp(host, "127.0.0.1") == 0 || strcmp(host, "localhost") == 0)) {
+    fprintf(stderr, "[RDP] verifyChangedCertificateCallback: Accepting changed loopback cert for %s\n", host);
+    fflush(stderr);
+    return 1; // Trust changed loopback certificate
+  }
+  fprintf(stderr, "[RDP] verifyChangedCertificateCallback: Rejecting changed non-loopback cert for %s\n", host ? host : "(null)");
+  fflush(stderr);
+  return 0; // Reject others
+}
+
 struct RdpSessionContext {
   rdpContext _ctx;
   RdpSession* session;
@@ -234,6 +263,8 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
 
+  instance_->VerifyCertificate = verifyCertificateCallback;
+  instance_->VerifyChangedCertificate = verifyChangedCertificateCallback;
   instance_->PostConnect = postConnectCallback;
 
   WLog_SetLogLevel(WLog_Get("com.freerdp.core.tls"), WLOG_DEBUG);

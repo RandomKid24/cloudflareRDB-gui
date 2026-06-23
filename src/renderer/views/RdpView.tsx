@@ -14,6 +14,37 @@ function isPasswordExpired(msg: string): boolean {
   return msg.includes('code=131087') || /password.*(expired|must be changed)/i.test(msg);
 }
 
+function getFriendlyErrorMessage(msg: string): { title: string; desc: string } {
+  if (msg.includes('code=131081') || /authentication failure/i.test(msg)) {
+    return {
+      title: 'RDP Authentication Failure (Error 131081)',
+      desc: 'The remote computer rejected your login credentials. Please verify your Windows Username and Password in the tunnel edit settings and try again.',
+    };
+  }
+  if (msg.includes('code=131085') || /transport layer failed/i.test(msg)) {
+    return {
+      title: 'Network Transport Failure (Error 131085)',
+      desc: 'Could not establish connection to the remote port. Please make sure that:\n1. Your Cloudflare Tunnel is connected and active.\n2. The remote computer is turned on and allows Remote Desktop connections.',
+    };
+  }
+  if (msg.includes('code=131087') || /password.*(expired|must be changed)/i.test(msg)) {
+    return {
+      title: 'Password Expired (Error 131087)',
+      desc: 'Your Windows user password has expired and must be changed before you can log in.',
+    };
+  }
+  if (msg.includes('Cannot find module') && msg.includes('rdp_addon.node')) {
+    return {
+      title: 'RDP Addon Initialization Failure',
+      desc: 'The integrated RDP engine failed to load. Please make sure you have installed the latest version of the app and that your antivirus is not blocking the application modules.',
+    };
+  }
+  return {
+    title: 'RDP Connection Error',
+    desc: msg || 'An unknown error occurred while establishing the RDP session.',
+  };
+}
+
 export function RdpView({ tunnel, onBack }: Props) {
   const [status, setStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [error, setError] = useState('');
