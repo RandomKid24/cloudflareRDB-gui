@@ -4,6 +4,7 @@
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/input.h>
 #include <winpr/wlog.h>
+#include <winpr/sspi.h>
 #include <thread>
 #include <chrono>
 
@@ -258,6 +259,14 @@ bool RdpSession::connect() {
 #ifdef _WIN32
   ensureLegacyProvider();
 #endif
+
+  // FreeRDP 3.x: sspi_GlobalInit() must be called once before any SSPI operation.
+  // It populates NEGOTIATE_SecPkgInfoW_NameBuffer (and similar buffers) via
+  // InitializeConstWCharFromUtf8. Without this, QuerySecurityPackageInfo("Negotiate")
+  // does _wcscmp(L"Negotiate", L"") and returns SEC_E_SECPKG_NOT_FOUND, which
+  // manifests as the "packageName=N" / ERRCONNECT_AUTHENTICATION_FAILED error.
+  // This call is idempotent — safe to call multiple times.
+  sspi_GlobalInit();
   instance_ = freerdp_new();
   if (!instance_) {
     lastError_ = "freerdp_new failed";
