@@ -59,7 +59,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\vcpkg\installed
-          key: vcpkg-freerdp-3.26.0-v8-${{ hashFiles('vcpkg-overlay/ports/freerdp/**') }}
+          key: vcpkg-freerdp-3.26.0-v9-${{ hashFiles('vcpkg-overlay/ports/freerdp/**') }}
 
       - name: Install FreeRDP (Linux)
         if: runner.os == 'Linux'
