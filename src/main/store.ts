@@ -10,7 +10,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   cloudflaredPath: '',
   launchOnStartup: false,
   startMinimizedToTray: false,
-  theme: 'dark',
   autoReconnectAttempts: 3,
   forgetPasswordAfterSession: true,
 };

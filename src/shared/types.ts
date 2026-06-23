@@ -41,13 +41,10 @@ export interface LogEntry {
   message: string;
 }
 
-export type ThemeMode = 'dark' | 'light' | 'system' | 'transparent' | 'nordic' | 'sunset';
-
 export interface AppSettings {
   cloudflaredPath: string;
   launchOnStartup: boolean;
   startMinimizedToTray: boolean;
-  theme: ThemeMode;
   autoReconnectAttempts: number;
   forgetPasswordAfterSession: boolean;
 }

@@ -1,20 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { AppSettings, ThemeMode } from '../../shared/types';
+import { AppSettings } from '../../shared/types';
 
 const DEFAULT_SETTINGS: AppSettings = {
   cloudflaredPath: '',
   launchOnStartup: false,
   startMinimizedToTray: false,
-  theme: 'dark',
   autoReconnectAttempts: 3,
   forgetPasswordAfterSession: true,
 };
 
-interface Props {
-  onThemeChange?: (theme: ThemeMode) => void;
-}
-
-export function Settings({ onThemeChange }: Props) {
+export function Settings() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [cloudflaredStatus, setCloudflaredStatus] = useState<{ found: boolean; path: string | null } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -30,9 +25,6 @@ export function Settings({ onThemeChange }: Props) {
     setSaving(true);
     await window.cloudflareRdp.settings.set(next);
     setSaving(false);
-    if (partial.theme && onThemeChange) {
-      onThemeChange(partial.theme);
-    }
   };
 
   const browseCloudflared = async () => {
@@ -116,30 +108,6 @@ export function Settings({ onThemeChange }: Props) {
       </Section>
 
       <Divider />
-
-      <Section title="Appearance" tooltip="Customize the look and feel of TunnelGate.">
-        <select
-          value={settings.theme}
-          onChange={(e) => update({ theme: e.target.value as ThemeMode })}
-          style={{
-            padding: '8px 12px',
-            fontSize: 13,
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 6,
-            color: 'var(--text-primary)',
-            outline: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-          <option value="system">System</option>
-          <option value="transparent">Transparent</option>
-          <option value="nordic">Nordic</option>
-          <option value="sunset">Sunset</option>
-        </select>
-      </Section>
 
       {saving && (
         <div style={{ position: 'fixed', bottom: 16, right: 16, padding: '8px 16px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
