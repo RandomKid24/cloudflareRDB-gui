@@ -41,7 +41,7 @@ vcpkg_cmake_configure(
         -DWITH_CLANG_FORMAT=OFF
         -DWITH_MANPAGES=OFF
         -DWITH_OPENSSL=ON
-        -DWITH_NATIVE_SSPI=ON
+        -DWITH_NATIVE_SSPI=OFF
         "-DMSVC_RUNTIME=${VCPKG_CRT_LINKAGE}"
         -DPKG_CONFIG_USE_CMAKE_PREFIX_PATH=ON
         # Uncontrolled dependencies w.r.t. vcpkg ports

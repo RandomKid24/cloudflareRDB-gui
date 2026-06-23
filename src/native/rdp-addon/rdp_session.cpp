@@ -260,8 +260,14 @@ bool RdpSession::connect() {
   ensureLegacyProvider();
 #endif
 
-  // FreeRDP/WinPR SSPI initialization is idempotent and must happen before NLA.
+  // FreeRDP 3.x: sspi_GlobalInit() must be called once before any SSPI operation.
+  // It populates NEGOTIATE_SecPkgInfoW_NameBuffer (and similar buffers) via
+  // InitializeConstWCharFromUtf8. Without this, QuerySecurityPackageInfo("Negotiate")
+  // does _wcscmp(L"Negotiate", L"") and returns SEC_E_SECPKG_NOT_FOUND, which
+  // manifests as the "packageName=N" / ERRCONNECT_AUTHENTICATION_FAILED error.
+  // This call is idempotent — safe to call multiple times.
   sspi_GlobalInit();
+  fprintf(stderr, "[RDP] sspi_GlobalInit() called successfully\n");
   instance_ = freerdp_new();
   if (!instance_) {
     lastError_ = "freerdp_new failed";
