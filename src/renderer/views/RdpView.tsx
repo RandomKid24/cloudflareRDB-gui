@@ -48,14 +48,12 @@ function getFriendlyErrorMessage(msg: string): { title: string; desc: string } {
 export function RdpView({ tunnel, onBack }: Props) {
   const [status, setStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [error, setError] = useState('');
-  const [fullscreen, setFullscreen] = useState(false);
   const [addonAvailable, setAddonAvailable] = useState<boolean | null>(null);
   const [passwordUpdateRequired, setPasswordUpdateRequired] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [updateError, setUpdateError] = useState('');
   const [showPasswordExpired, setShowPasswordExpired] = useState(false);
-  const [toolbarHover, setToolbarHover] = useState(false);
   const [canvasWidth, setCanvasWidth] = useState(DEFAULT_WIDTH);
   const [canvasHeight, setCanvasHeight] = useState(DEFAULT_HEIGHT);
   const active = tunnel?.runtime.status === 'connected';
@@ -74,7 +72,7 @@ export function RdpView({ tunnel, onBack }: Props) {
         const { inlineSize, blockSize } = entry.borderBoxSize?.[0] ?? entry.contentBoxSize?.[0] ?? { inlineSize: DEFAULT_WIDTH, blockSize: DEFAULT_HEIGHT };
         const w = Math.max(640, Math.min(2560, Math.round(inlineSize)));
         let h = Math.max(480, Math.min(1440, Math.round(blockSize)));
-        if (!fullscreen && toolbarEl) {
+        if (toolbarEl) {
           h = Math.max(480, Math.min(1440, h - toolbarEl.offsetHeight));
         }
         connectSizeRef.current = { width: w, height: h };
@@ -84,7 +82,7 @@ export function RdpView({ tunnel, onBack }: Props) {
     });
     ro.observe(container);
     return () => ro.disconnect();
-  }, [fullscreen]);
+  }, []);
 
   useEffect(() => {
     window.cloudflareRdp.rdp.isAvailable()
@@ -179,22 +177,6 @@ export function RdpView({ tunnel, onBack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
-  const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    } else {
-      document.documentElement.requestFullscreen().catch(() => {});
-    }
-  }, []);
-
-  useEffect(() => {
-    const onFSChange = () => {
-      setFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', onFSChange);
-    return () => document.removeEventListener('fullscreenchange', onFSChange);
-  }, []);
-
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !passwordUpdateRequired) {
@@ -269,41 +251,22 @@ export function RdpView({ tunnel, onBack }: Props) {
     );
   }
 
-  const containerStyle: React.CSSProperties = fullscreen
-    ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: '#000', display: 'flex', flexDirection: 'column' }
-    : { height: '100%', display: 'flex', flexDirection: 'column', background: '#000' };
+  const containerStyle: React.CSSProperties = { height: '100%', display: 'flex', flexDirection: 'column', background: '#000' };
 
-  const toolbarStyle: React.CSSProperties = fullscreen
-    ? {
-        position: 'absolute',
-        top: 0, left: 0, right: 0,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '8px 16px',
-        background: toolbarHover ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.4)',
-        color: '#fff',
-        fontSize: 13,
-        zIndex: 10,
-        opacity: toolbarHover ? 1 : 0.15,
-        transition: 'opacity 0.2s',
-      }
-    : {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '8px 16px',
-        background: 'var(--bg-secondary)',
-        color: '#fff',
-        fontSize: 13,
-        flexShrink: 0,
-      };
+  const toolbarStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '8px 16px',
+    background: 'var(--bg-secondary)',
+    color: '#fff',
+    fontSize: 13,
+    flexShrink: 0,
+  };
 
   return (
     <div ref={containerRef} style={containerStyle}>
-      <div ref={toolbarRef} style={toolbarStyle}
-        onMouseEnter={() => setToolbarHover(true)}
-        onMouseLeave={() => setToolbarHover(false)}>
+      <div ref={toolbarRef} style={toolbarStyle}>
         <button onClick={handleBack} style={toolbarBtnStyle}>← Back</button>
         <span style={{ fontWeight: 600 }}>{tunnel.name}</span>
         <span style={{ opacity: 0.6 }}>
@@ -317,9 +280,6 @@ export function RdpView({ tunnel, onBack }: Props) {
             Open Native Client
           </button>
         )}
-        <button onClick={toggleFullscreen} style={toolbarBtnStyle}>
-          {fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-        </button>
       </div>
 
       {passwordUpdateRequired && (
@@ -488,7 +448,7 @@ export function RdpView({ tunnel, onBack }: Props) {
       )}
 
       {status === 'connected' && (
-        <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+        <div style={{ flex: 1, position: 'relative', minHeight: 0, display: 'flex', overflow: 'hidden' }}>
           {navigator.userAgent.toLowerCase().includes('win') && (
             <div style={{
               position: 'absolute',

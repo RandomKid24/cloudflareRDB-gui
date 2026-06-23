@@ -311,7 +311,7 @@ Security: `contextIsolation: true`, `nodeIntegration: false`.
 | View | File | Purpose |
 |------|------|---------|
 | Tunnels | `views/Tunnels.tsx` | Tunnel list with CRUD, connect/disconnect, "View Screen" button |
-| RdpView | `views/RdpView.tsx` | Full-screen RDP viewer with auto-hide toolbar (Fullscreen API) + error/password-update overlays |
+| RdpView | `views/RdpView.tsx` | RDP viewer with toolbar, canvas, error/password-update overlays. Fullscreen delegated to OS (F11/window manager) |
 | Logs | `views/Logs.tsx` | Filtered log viewer with tunnel chips |
 | Settings | `views/Settings.tsx` | Cloudflared path, auto-start, reconnect count, theme |
 
@@ -352,7 +352,7 @@ password expired detected  → Amber dialog with password input + "Update & Reco
 
 ### RdpView Fullscreen
 
-Fullscreen uses the native Fullscreen API (`document.documentElement.requestFullscreen()`) which hides the OS taskbar and window chrome. The toolbar is absolutely positioned over the canvas with `opacity: 0.15` by default and reveals to full opacity on mouse hover. This ensures the RDP canvas fills the entire screen without clipping the remote desktop.
+Fullscreen is delegated entirely to the OS (F11 / window manager). The in-app fullscreen button was removed because it conflicts with the OS-native fullscreen behavior and provides no additional value. The canvas parent uses `display: flex; overflow: hidden` to fill the available space correctly.
 
 ---
 
