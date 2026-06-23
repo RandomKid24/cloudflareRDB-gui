@@ -329,7 +329,7 @@ bool RdpSession::connect() {
   }
 
   // Security: offer TLS and NLA, let server choose. Server requires HYBRID.
-  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
   freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
 
