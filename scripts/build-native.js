@@ -257,6 +257,29 @@ if (isWin) {
       console.log(`  Copied dependency ${dll}`);
     }
   }
+
+  // Copy VC++ runtime DLLs (msvcp140, vcruntime140, vcruntime140_1)
+  // These are needed for the addon and FreeRDP DLLs on systems without Visual Studio.
+  const vcDlls = ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];
+  const vswhere = spawnSync('vswhere', ['-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-property', 'installationPath'], { encoding: 'utf8' });
+  if (vswhere.status === 0 && vswhere.stdout) {
+    const vsPath = vswhere.stdout.trim().split('\n')[0];
+    const msvcGlob = path.join(vsPath, 'VC', 'Tools', 'MSVC', '*', 'bin', 'Hostx64', 'x64');
+    const msvcDirs = fs.readdirSync(path.dirname(msvcGlob)).filter(d => d.startsWith('14.'));
+    for (const ver of msvcDirs) {
+      const binDir2 = path.join(vsPath, 'VC', 'Tools', 'MSVC', ver, 'bin', 'Hostx64', 'x64');
+      if (fs.existsSync(binDir2)) {
+        for (const dll of vcDlls) {
+          const p = path.join(binDir2, dll);
+          if (fs.existsSync(p)) {
+            fs.copyFileSync(p, path.join(addonOutDir, dll));
+            console.log(`  Copied VC runtime ${dll}`);
+          }
+        }
+        break;
+      }
+    }
+  }
   // OpenSSL 3.x loads providers from <dll_dir>/ossl-modules/ by default,
   // but we also set OPENSSL_MODULES=addonDir at runtime, so copy to both locations.
   const osslModulesDir = path.join(addonOutDir, 'ossl-modules');
