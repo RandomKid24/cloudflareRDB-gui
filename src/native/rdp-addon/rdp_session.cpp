@@ -4,6 +4,8 @@
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/input.h>
 #include <winpr/wlog.h>
+#include <thread>
+#include <chrono>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -447,9 +449,7 @@ void RdpSession::pump() {
       fprintf(stderr, "[RDP] pump: no event handles\n");
       fflush(stderr);
 #ifdef _WIN32
-      Sleep(10);
-#else
-      usleep(10000);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #endif
       continue;
     }
@@ -479,11 +479,7 @@ void RdpSession::pump() {
     } else {
       consecutiveFailures = 0;
     }
-#ifdef _WIN32
-    Sleep(10);
-#else
-    usleep(10000);
-#endif
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   fprintf(stderr, "[RDP] pump exited\n");
   fflush(stderr);
