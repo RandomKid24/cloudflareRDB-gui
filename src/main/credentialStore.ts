@@ -26,7 +26,8 @@ export class CredentialStore {
     tunnelName: string,
     username: string,
     password: string,
-    port: number
+    port: number,
+    tunnelHostname?: string,
   ): Promise<void> {
     if (!isWin) {
       writeLog(tunnelId, tunnelName, 'info', 'Credential injection skipped (non-Windows)');
@@ -34,6 +35,9 @@ export class CredentialStore {
     }
 
     const targets = [`TERMSRV/localhost:${port}`, `TERMSRV/127.0.0.1:${port}`];
+    if (tunnelHostname) {
+      targets.push(`TERMSRV/${tunnelHostname}:${port}`);
+    }
     for (const target of targets) {
       await new Promise<void>((resolve, reject) => {
         const proc = spawn('cmdkey', [
@@ -63,13 +67,16 @@ export class CredentialStore {
     }
   }
 
-  async clearCredential(tunnelId: string, tunnelName: string, port: number): Promise<void> {
+  async clearCredential(tunnelId: string, tunnelName: string, port: number, tunnelHostname?: string): Promise<void> {
     if (!isWin) {
       writeLog(tunnelId, tunnelName, 'info', 'Credential clear skipped (non-Windows)');
       return;
     }
 
     const targets = [`TERMSRV/localhost:${port}`, `TERMSRV/127.0.0.1:${port}`];
+    if (tunnelHostname) {
+      targets.push(`TERMSRV/${tunnelHostname}:${port}`);
+    }
     for (const target of targets) {
       await new Promise<void>((resolve) => {
         const proc = spawn('cmdkey', ['/delete:' + target], {

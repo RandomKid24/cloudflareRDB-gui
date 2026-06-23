@@ -170,7 +170,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
     if (!port) throw new Error('Tunnel not connected — no local port');
 
     if (isWin) {
-      await credentialStore.clearCredential(tunnelId, config.name, port).catch(() => {});
+      await credentialStore.clearCredential(tunnelId, config.name, port, config.hostname).catch(() => {});
     }
 
     let password: string;
@@ -181,7 +181,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
     }
 
     if (isWin) {
-      await credentialStore.injectCredential(tunnelId, config.name, config.username, password, port);
+      await credentialStore.injectCredential(tunnelId, config.name, config.username, password, port, config.hostname);
     }
 
     await rdpViewManager.connectView(tunnelId, port, config.username, password, config.hostname, width, height);
@@ -203,7 +203,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
     if (!port) throw new Error('Tunnel not connected — no local port');
 
     if (isWin) {
-      await credentialStore.injectCredential(tunnelId, config.name, config.username, newPassword, port);
+      await credentialStore.injectCredential(tunnelId, config.name, config.username, newPassword, port, config.hostname);
     }
 
     rdpViewManager.disconnectView(tunnelId);

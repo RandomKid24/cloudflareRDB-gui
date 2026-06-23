@@ -8,7 +8,7 @@
   "scripts": {
     "dev:renderer": "vite",
     "dev:main": "tsc -p tsconfig.main.json && electron .",
-    "dev": "concurrently \"npm run dev:renderer\" \"node -e setTimeout(()=>process.exit(0),2000) && npm run dev:main\"",
+    "dev": "concurrently \"npm run dev:renderer\" \"node -e \\\"setTimeout(()=>process.exit(0),2000)\\\" && npm run dev:main\"",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
     "build:preload": "tsc -p tsconfig.preload.json",

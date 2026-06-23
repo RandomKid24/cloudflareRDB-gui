@@ -395,6 +395,7 @@ export class TunnelManager {
       tunnel.config.username,
       tunnel.password,
       tunnel.state.localPort,
+      tunnel.config.hostname,
     ).catch((err: any) => {
       writeLog(tunnel.config.id, tunnel.config.name, 'error', `Credential injection failed: ${err.message}`);
     });
@@ -429,7 +430,7 @@ export class TunnelManager {
     proc.on('close', () => {
       writeLog(tunnel.config.id, tunnel.config.name, 'info', 'RDP session window closed');
       if (getSettings().forgetPasswordAfterSession) {
-        credentialStore.clearCredential(tunnel.config.id, tunnel.config.name, port);
+        credentialStore.clearCredential(tunnel.config.id, tunnel.config.name, port, tunnel.config.hostname);
       }
     });
   }
@@ -534,7 +535,7 @@ export class TunnelManager {
     }
 
     if (tunnel.state.localPort && getSettings().forgetPasswordAfterSession) {
-      await credentialStore.clearCredential(tunnel.config.id, tunnel.config.name, tunnel.state.localPort);
+      await credentialStore.clearCredential(tunnel.config.id, tunnel.config.name, tunnel.state.localPort, tunnel.config.hostname);
     }
 
     this.setStatus(tunnel, 'disconnected');

@@ -281,13 +281,13 @@ bool RdpSession::connect() {
 
   rdpSettings* settings = context_->settings;
   freerdp_settings_set_string(settings, FreeRDP_ServerHostname, host_.c_str());
-  // FreeRDP 3.x: UserSpecifiedServerName must ONLY differ from ServerHostname
-  // when NOT connecting through a local tunnel. When the target is 127.0.0.1
-  // (cloudflared tunnel), UserSpecifiedServerName causes FreeRDP to resolve
-  // the real hostname and bypass the tunnel entirely. Credentials are already
-  // injected via cmdkey for TERMSRV/127.0.0.1:port, so keep both names equal.
+  // UserSpecifiedServerName is set to the REAL hostname (not 127.0.0.1) so that
+  // FreeRDP's NLA/SSPI can generate a valid SPN for authentication. ServerHostname
+  // stays as 127.0.0.1 so the TCP connection goes through the cloudflared tunnel.
+  // FreeRDP 3.x uses UserSpecifiedServerName ONLY for SPN/title, not for TCP resolution
+  // when ServerHostname is explicitly set.
 #if defined(FREERDP_VERSION_MAJOR) && FREERDP_VERSION_MAJOR >= 3
-  freerdp_settings_set_string(settings, FreeRDP_UserSpecifiedServerName, host_.c_str());
+  freerdp_settings_set_string(settings, FreeRDP_UserSpecifiedServerName, serverHostname_.c_str());
 #else
   freerdp_settings_set_string(settings, FreeRDP_ServerHostname, host_.c_str());
 #endif
@@ -343,16 +343,10 @@ bool RdpSession::connect() {
     fflush(stderr);
   }
 
-  // Security: TLS + RDP always.
+  // Security: enable all protocols — server chooses HYBRID (NLA + TLS).
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
-  // NLA: disabled on Windows (SSPI SPN check fails over tunnel to localhost),
-  // enabled on Mac/Linux (standard Kerberos/NTLM via FreeRDP's internal NLA).
-#ifdef _WIN32
-  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
-#else
-  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
-#endif
 
   // Set TLS security level to 1 (instead of OpenSSL 3.x default of 2).
   // This allows connecting to servers with self-signed certificates or smaller key sizes (e.g. 1024-bit).
