@@ -204,6 +204,18 @@ if (isWin) {
       console.log(`  Copied dependency ${dll}`);
     }
   }
+  const legacyPaths = [
+    path.join(binDir, 'legacy.dll'),
+    path.join(binDir, 'ossl-modules', 'legacy.dll'),
+    path.join(freerdpRoot, 'lib', 'ossl-modules', 'legacy.dll'),
+  ];
+  for (const lp of legacyPaths) {
+    if (fs.existsSync(lp)) {
+      fs.copyFileSync(lp, path.join(addonOutDir, 'legacy.dll'));
+      console.log(`  Copied legacy provider ${path.basename(lp)}`);
+      break;
+    }
+  }
 }
 
 if (isMac) {

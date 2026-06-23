@@ -266,11 +266,13 @@ bool RdpSession::connect() {
   instance_->VerifyChangedCertificate = verifyChangedCertificateCallback;
   instance_->PostConnect = postConnectCallback;
 
-  WLog_SetLogLevel(WLog_Get("com.freerdp.core.tls"), WLOG_DEBUG);
-  WLog_SetLogLevel(WLog_Get("com.freerdp.core.nego"), WLOG_DEBUG);
-  WLog_SetLogLevel(WLog_Get("com.freerdp.core.transport"), WLOG_DEBUG);
-  WLog_SetLogLevel(WLog_Get("com.freerdp.core.nla"), WLOG_DEBUG);
-  WLog_SetLogLevel(WLog_Get("com.winpr.sspi"), WLOG_DEBUG);
+  WLog_SetLogLevel(WLog_Get("com.freerdp.core.tls"), WLOG_TRACE);
+  WLog_SetLogLevel(WLog_Get("com.freerdp.core.nego"), WLOG_TRACE);
+  WLog_SetLogLevel(WLog_Get("com.freerdp.core.transport"), WLOG_TRACE);
+  WLog_SetLogLevel(WLog_Get("com.freerdp.core.nla"), WLOG_TRACE);
+  WLog_SetLogLevel(WLog_Get("com.freerdp.core.credssp"), WLOG_TRACE);
+  WLog_SetLogLevel(WLog_Get("com.winpr.sspi"), WLOG_TRACE);
+  WLog_SetLogLevel(WLog_GetRoot(), WLOG_TRACE);
 
   const char* actualHost = freerdp_settings_get_string(settings, FreeRDP_ServerHostname);
   UINT32 actualPort = freerdp_settings_get_uint32(settings, FreeRDP_ServerPort);
