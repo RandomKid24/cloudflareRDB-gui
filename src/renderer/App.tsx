@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tunnels } from './views/Tunnels';
 import { Logs } from './views/Logs';
 import { Settings } from './views/Settings';
 import { RdpView } from './views/RdpView';
 import { useTunnels, TunnelWithState } from './hooks/useTunnels';
+import { ThemeMode } from '../shared/types';
 
 type Tab = 'tunnels' | 'logs' | 'settings';
 
@@ -12,6 +13,44 @@ function App() {
   const [viewingTunnel, setViewingTunnel] = useState<TunnelWithState | null>(null);
   const [selectedLogTunnelId, setSelectedLogTunnelId] = useState<string | undefined>(undefined);
   const { tunnels, loading, add, update, remove, connect, disconnect } = useTunnels();
+  const [theme, setTheme] = useState<ThemeMode>('dark');
+
+  useEffect(() => {
+    window.cloudflareRdp.settings.get().then((s) => {
+      if (s.theme) setTheme(s.theme);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (document.body.classList.contains('transparent') && theme !== 'transparent') {
+      document.body.style.background = 'var(--bg-primary)';
+    }
+    const effective = theme === 'system'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : theme;
+    for (const cls of ['dark', 'light', 'transparent', 'nordic', 'sunset']) {
+      document.documentElement.classList.toggle(cls, cls === effective);
+    }
+    if (effective === 'transparent') {
+      document.body.style.background = 'transparent';
+    } else {
+      document.body.style.background = '';
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => {
+      if (theme === 'system') {
+        const effective = mq.matches ? 'dark' : 'light';
+        for (const cls of ['dark', 'light', 'transparent', 'nordic', 'sunset']) {
+          document.documentElement.classList.toggle(cls, cls === effective);
+        }
+      }
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [theme]);
 
   const navItems: { id: Tab; label: string }[] = [
     { id: 'tunnels', label: 'Tunnels' },
@@ -89,7 +128,7 @@ function App() {
             onClearFilter={() => setSelectedLogTunnelId(undefined)}
           />
         )}
-        {tab === 'settings' && <Settings />}
+        {tab === 'settings' && <Settings onThemeChange={setTheme} />}
       </main>
     </div>
   );

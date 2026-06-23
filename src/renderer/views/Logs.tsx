@@ -11,7 +11,7 @@ interface Props {
 }
 
 export function Logs({ tunnels, initialTunnelId, onClearFilter }: Props) {
-  const { logs, exportLogs } = useLogs();
+  const { logs, exportLogs, clearLogs } = useLogs();
   const [filterTunnelId, setFilterTunnelId] = useState<string | undefined>(initialTunnelId);
 
   const handleSelectFilter = (id: string | undefined) => {
@@ -42,6 +42,7 @@ export function Logs({ tunnels, initialTunnelId, onClearFilter }: Props) {
         <LogViewer
           logs={logs}
           onExport={() => exportLogs(filterTunnelId)}
+          onClear={clearLogs}
           filterTunnelId={filterTunnelId}
         />
       </div>

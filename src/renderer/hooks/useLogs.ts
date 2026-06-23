@@ -51,5 +51,11 @@ export function useLogs() {
     await window.cloudflareRdp.tunnels.exportLogs(tunnelId);
   }, []);
 
-  return { logs, exportLogs };
+  const clearLogs = useCallback(() => {
+    ringRef.current = [];
+    pendingRef.current = [];
+    setLogs([]);
+  }, []);
+
+  return { logs, exportLogs, clearLogs };
 }

@@ -214,6 +214,7 @@ TunnelGate wraps `cloudflared access tcp` into a GUI:
 
 ### `src/main/index.ts` — App Entry
 
+- Theme system: supports Dark, Light, System, Transparent (semi-transparent backgrounds), Nordic (blue-gray palette), Sunset (warm purple/orange). Theme is persisted in settings and applied via CSS classes on `<html>`. System theme reacts to `prefers-color-scheme` media query changes.
 - Creates tray with 4 programmatic icons (idle/connecting/connected/error as 16×16 RGBA circles)
 - Creates BrowserWindow (1000×700, min 900×600)
 - Loads Vite dev server (port 5173) in dev or `dist/renderer/index.html` in prod
@@ -310,26 +311,27 @@ Security: `contextIsolation: true`, `nodeIntegration: false`.
 
 | View | File | Purpose |
 |------|------|---------|
-| Tunnels | `views/Tunnels.tsx` | Tunnel list with CRUD, connect/disconnect, "View Screen" button |
+| Tunnels | `views/Tunnels.tsx` | Tunnel list with CRUD, animated status dots, connection duration timer, last-connected timestamps, port badges, hover effects |
 | RdpView | `views/RdpView.tsx` | RDP viewer with toolbar, canvas, error/password-update overlays. Fullscreen delegated to OS (F11/window manager) |
-| Logs | `views/Logs.tsx` | Filtered log viewer with tunnel chips |
-| Settings | `views/Settings.tsx` | Cloudflared path, auto-start, reconnect count, theme |
+| Logs | `views/Logs.tsx` | Filtered log viewer with tunnel chips, search/filter box, auto-scroll toggle, level badges, clear button |
+| Settings | `views/Settings.tsx` | Cloudflared path, auto-start, reconnect count, theme (Dark/Light/System/Transparent/Nordic/Sunset), tooltips on all settings, section dividers |
 
 ### Components
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| TunnelCard | `components/TunnelCard.tsx` | Status dot, live output scroller, action buttons |
+| TunnelCard | `components/TunnelCard.tsx` | Status dot (animated pulse when connecting), live output scroller, connection duration timer, hover highlight, port badge, last-connected time, action buttons |
 | TunnelForm | `components/TunnelForm.tsx` | Add/edit form with hostname validation, password toggle |
 | RdpCanvas | `components/RdpCanvas.tsx` | Double-buffered canvas rendering RDP frames |
-| LogViewer | `components/LogViewer.tsx` | Scrollable log with auto-scroll detection |
+| LogViewer | `components/LogViewer.tsx` | Scrollable log with auto-scroll toggle, search/filter box, level badges (ERROR/WARN/INFO/DEBUG), millisecond timestamps, clear button, export |
+| Settings | `views/Settings.tsx` | Section dividers, tooltips on every setting, theme selector (Dark/Light/System/Transparent/Nordic/Sunset), cloudflared path browser |
 
 ### Hooks
 
 | Hook | File | Purpose |
 |------|------|---------|
 | useTunnels | `hooks/useTunnels.ts` | CRUD + live status via IPC + tray events |
-| useLogs | `hooks/useLogs.ts` | Streaming logs, 500-entry ring, rAF batching |
+| useLogs | `hooks/useLogs.ts` | Streaming logs, 500-entry ring, rAF batching, clear function |
 
 ### RdpCanvas Details
 
@@ -355,6 +357,25 @@ password expired detected  → Amber dialog with password input + "Update & Reco
 Fullscreen is delegated entirely to the OS (F11 / window manager). The in-app fullscreen button was removed because it conflicts with the OS-native fullscreen behavior and provides no additional value. The canvas parent uses `display: flex; overflow: hidden` to fill the available space correctly.
 
 Canvas dimensions are frozen after the initial RDP connect to prevent buffer clearing on window resize. The canvas uses `object-fit: contain` with `image-rendering: pixelated` CSS for crisp scaling. ResizeObserver continues to track container size in `connectSizeRef` for potential reconnects but no longer updates canvas state after connection is established.
+
+### LogViewer Features
+
+- **Millisecond timestamps**: `HH:MM:SS.mmm` format for precise debugging
+- **Log level badges**: Color-coded pill badges `[ERROR]` `[WARN]` `[INFO]` `[DEBUG]`
+- **Color coding**: Errors in red, warnings in amber, info in default, debug in muted
+- **Auto-scroll toggle**: Button to lock/unlock auto-scroll to bottom; auto-disables when user scrolls up
+- **Search/filter box**: Real-time text filtering across message, tunnel name, and level
+- **Clear button**: Clears the in-memory log buffer without affecting persisted logs or export
+- **Tunnel filter chips**: Filter by specific tunnel or view all
+
+### TunnelCard Features
+
+- **Animated status dot**: Pulsing animation when connecting/reconnecting, solid otherwise
+- **Connection duration timer**: Live "5m 32s" counter displayed next to hostname when connected
+- **Last connected time**: Relative timestamp ("5m ago") shown under hostname
+- **Port badge**: Subtle monospace badge showing `:3380` next to the status label
+- **Hover highlight**: Card lifts slightly and shows shadow on mouse hover
+- **Card enter animation**: Fade-in + slide-up when cards first appear
 
 ---
 
@@ -626,7 +647,7 @@ Stored as JSON in electron-store default location (`tunnelgate-config`):
   cloudflaredPath: string,        // default ""
   launchOnStartup: boolean,       // default false
   startMinimizedToTray: boolean,   // default false
-  theme: 'light' | 'dark' | 'system', // default 'dark'
+  theme: 'dark' | 'light' | 'system' | 'transparent' | 'nordic' | 'sunset', // default 'dark'
   autoReconnectAttempts: number,  // default 3
   forgetPasswordAfterSession: boolean  // default true
 }

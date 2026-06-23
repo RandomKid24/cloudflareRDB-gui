@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AppSettings } from '../../shared/types';
+import { AppSettings, ThemeMode } from '../../shared/types';
 
 const DEFAULT_SETTINGS: AppSettings = {
   cloudflaredPath: '',
@@ -10,7 +10,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   forgetPasswordAfterSession: true,
 };
 
-export function Settings() {
+interface Props {
+  onThemeChange?: (theme: ThemeMode) => void;
+}
+
+export function Settings({ onThemeChange }: Props) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [cloudflaredStatus, setCloudflaredStatus] = useState<{ found: boolean; path: string | null } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -26,6 +30,9 @@ export function Settings() {
     setSaving(true);
     await window.cloudflareRdp.settings.set(next);
     setSaving(false);
+    if (partial.theme && onThemeChange) {
+      onThemeChange(partial.theme);
+    }
   };
 
   const browseCloudflared = async () => {
@@ -37,13 +44,11 @@ export function Settings() {
     }
   };
 
-  const isDark = settings.theme === 'dark' || (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-
   return (
     <div style={{ padding: 24, overflowY: 'auto', height: '100%' }}>
       <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, marginBottom: 24 }}>Settings</h1>
 
-      <Section title="Cloudflared">
+      <Section title="Cloudflared" tooltip="Path to the cloudflared binary used to create TCP tunnels. Auto-detected if left empty.">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: cloudflaredStatus?.found ? 'var(--accent-green)' : 'var(--accent-red)' }}>
@@ -78,14 +83,18 @@ export function Settings() {
         </div>
       </Section>
 
-      <Section title="Startup & Behavior">
-        <Toggle checked={settings.launchOnStartup} onChange={(v) => update({ launchOnStartup: v })} label="Launch on system startup" />
-        <Toggle checked={settings.startMinimizedToTray} onChange={(v) => update({ startMinimizedToTray: v })} label="Start minimized to tray" />
-        <Toggle checked={settings.forgetPasswordAfterSession} onChange={(v) => update({ forgetPasswordAfterSession: v })} label="Forget password after each session" />
+      <Divider />
+
+      <Section title="Startup & Behavior" tooltip="Control how the app behaves when your computer starts and during sessions.">
+        <Toggle checked={settings.launchOnStartup} onChange={(v) => update({ launchOnStartup: v })} label="Launch on system startup" tooltip="Automatically start TunnelGate when you log into Windows." />
+        <Toggle checked={settings.startMinimizedToTray} onChange={(v) => update({ startMinimizedToTray: v })} label="Start minimized to tray" tooltip="Start the app in the system tray without opening the window." />
+        <Toggle checked={settings.forgetPasswordAfterSession} onChange={(v) => update({ forgetPasswordAfterSession: v })} label="Forget password after each session" tooltip="Clear the stored password from memory when the tunnel disconnects for security." />
       </Section>
 
-      <Section title="Connection">
-        <Field label="Auto-reconnect attempts">
+      <Divider />
+
+      <Section title="Connection" tooltip="Settings related to tunnel connection behavior.">
+        <Field label="Auto-reconnect attempts" tooltip="Number of times to automatically retry if the tunnel disconnects unexpectedly. Set to 0 to disable.">
           <input
             type="number"
             min={0}
@@ -106,10 +115,12 @@ export function Settings() {
         </Field>
       </Section>
 
-      <Section title="Appearance">
+      <Divider />
+
+      <Section title="Appearance" tooltip="Customize the look and feel of TunnelGate.">
         <select
           value={settings.theme}
-          onChange={(e) => update({ theme: e.target.value as AppSettings['theme'] })}
+          onChange={(e) => update({ theme: e.target.value as ThemeMode })}
           style={{
             padding: '8px 12px',
             fontSize: 13,
@@ -124,6 +135,9 @@ export function Settings() {
           <option value="dark">Dark</option>
           <option value="light">Light</option>
           <option value="system">System</option>
+          <option value="transparent">Transparent</option>
+          <option value="nordic">Nordic</option>
+          <option value="sunset">Sunset</option>
         </select>
       </Section>
 
@@ -136,10 +150,25 @@ export function Settings() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, tooltip }: { title: string; children: React.ReactNode; tooltip?: string }) {
   return (
     <div style={{ marginBottom: 24 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>{title}</h2>
+      <h2
+        title={tooltip}
+        style={{
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--text-secondary)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: 12,
+          cursor: tooltip ? 'help' : 'default',
+          borderBottom: tooltip ? '1px dashed var(--text-muted)' : 'none',
+          display: 'inline-block',
+        }}
+      >
+        {title}
+      </h2>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {children}
       </div>
@@ -147,23 +176,51 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Divider() {
+  return (
+    <div style={{ height: 1, background: 'var(--border-color)', marginBottom: 24 }} />
+  );
+}
+
+function Field({ label, children, tooltip }: { label: string; children: React.ReactNode; tooltip?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{label}</span>
+      <span
+        title={tooltip}
+        style={{
+          fontSize: 13,
+          color: 'var(--text-primary)',
+          cursor: tooltip ? 'help' : 'default',
+          borderBottom: tooltip ? '1px dashed var(--text-muted)' : 'none',
+          display: 'inline-block',
+          width: 'fit-content',
+        }}
+      >
+        {label}
+      </span>
       {children}
     </div>
   );
 }
 
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+function Toggle({ checked, onChange, label, tooltip }: { checked: boolean; onChange: (v: boolean) => void; label: string; tooltip?: string }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+    <label
+      title={tooltip}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        cursor: tooltip ? 'help' : 'pointer',
+        fontSize: 13,
+        transition: 'opacity 0.15s',
+      }}
+    >
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        style={{ accentColor: 'var(--accent-blue)', width: 16, height: 16 }}
+        style={{ accentColor: 'var(--accent-blue)', width: 16, height: 16, cursor: 'pointer' }}
       />
       {label}
     </label>

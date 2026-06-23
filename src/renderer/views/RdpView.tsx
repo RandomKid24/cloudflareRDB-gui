@@ -10,6 +10,13 @@ interface Props {
 const DEFAULT_WIDTH = 1280;
 const DEFAULT_HEIGHT = 720;
 
+function getBestRdpSize(containerW: number, containerH: number): { width: number; height: number } {
+  // Round down to nearest multiple of 4 (FreeRDP requirement)
+  const w = Math.max(800, Math.floor(containerW / 4) * 4);
+  const h = Math.max(600, Math.floor(containerH / 4) * 4);
+  return { width: w, height: h };
+}
+
 function isPasswordExpired(msg: string): boolean {
   return msg.includes('code=131087') || /password.*(expired|must be changed)/i.test(msg);
 }
@@ -71,16 +78,18 @@ export function RdpView({ tunnel, onBack }: Props) {
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { inlineSize, blockSize } = entry.borderBoxSize?.[0] ?? entry.contentBoxSize?.[0] ?? { inlineSize: DEFAULT_WIDTH, blockSize: DEFAULT_HEIGHT };
-        const w = Math.max(640, Math.min(2560, Math.round(inlineSize)));
-        let h = Math.max(480, Math.min(1440, Math.round(blockSize)));
+        const rawW = Math.max(640, Math.min(2560, Math.round(inlineSize)));
+        let rawH = Math.max(480, Math.min(1440, Math.round(blockSize)));
         if (toolbarEl) {
-          h = Math.max(480, Math.min(1440, h - toolbarEl.offsetHeight));
+          rawH = Math.max(480, Math.min(1440, rawH - toolbarEl.offsetHeight));
         }
-        connectSizeRef.current = { width: w, height: h };
+        const snapped = getBestRdpSize(rawW, rawH);
+        console.log('Container measured:', rawW, rawH, '→ RDP:', snapped.width, snapped.height);
+        connectSizeRef.current = snapped;
         // Only update canvas dimensions before connect (after connect, keep RDP resolution)
         if (!connectedRef.current) {
-          setCanvasWidth((prev) => prev === w ? prev : w);
-          setCanvasHeight((prev) => prev === h ? prev : h);
+          setCanvasWidth(snapped.width);
+          setCanvasHeight(snapped.height);
         }
       }
     });
@@ -120,7 +129,7 @@ export function RdpView({ tunnel, onBack }: Props) {
       setPasswordUpdateRequired(false);
       try {
         // Wait for ResizeObserver to measure the actual container
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 150));
         const { width, height } = connectSizeRef.current;
         await window.cloudflareRdp.rdp.connect(tunnel.id, width, height);
         setCanvasWidth(width);
