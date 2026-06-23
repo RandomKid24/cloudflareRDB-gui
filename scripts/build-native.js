@@ -239,7 +239,7 @@ if (isWin) {
     'installed', 'x64-windows'
   );
   const binDir = path.join(freerdpRoot, 'bin');
-  const dlls = ['freerdp2.dll', 'freerdp-client2.dll', 'winpr2.dll'];
+  const dlls = ['freerdp3.dll', 'freerdp-client3.dll', 'winpr3.dll', 'z.dll', 'cjson.dll'];
   for (const dll of dlls) {
     const p = path.join(binDir, dll);
     if (fs.existsSync(p)) {
