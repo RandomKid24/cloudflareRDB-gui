@@ -170,7 +170,14 @@ bool RdpSession::connect() {
     return false;
   }
 
-  freerdp_settings_set_string(settings, FreeRDP_Username, username_.c_str());
+  std::string normUsername = username_;
+  for (char& c : normUsername) {
+    if (c == '/') {
+      c = '\\';
+    }
+  }
+
+  freerdp_settings_set_string(settings, FreeRDP_Username, normUsername.c_str());
   if (!password_.empty())
     freerdp_settings_set_string(settings, FreeRDP_Password, password_.c_str());
 
@@ -178,12 +185,12 @@ bool RdpSession::connect() {
   {
     char* parsedUser = nullptr;
     char* parsedDomain = nullptr;
-    if (freerdp_parse_username(username_.c_str(), &parsedUser, &parsedDomain)) {
+    if (freerdp_parse_username(normUsername.c_str(), &parsedUser, &parsedDomain)) {
       if (parsedDomain && strlen(parsedDomain) > 0) {
         freerdp_settings_set_string(settings, FreeRDP_Username, parsedUser);
         freerdp_settings_set_string(settings, FreeRDP_Domain, parsedDomain);
         fprintf(stderr, "[RDP] parsed domain='%s' user='%s' from username='%s'\n",
-                parsedDomain, parsedUser, username_.c_str());
+                parsedDomain, parsedUser, normUsername.c_str());
       } else {
         freerdp_settings_set_string(settings, FreeRDP_Domain, ".");
       }
@@ -202,7 +209,7 @@ bool RdpSession::connect() {
   {
     char* parsedUser = nullptr;
     char* parsedDomain = nullptr;
-    if (freerdp_parse_username(username_.c_str(), &parsedUser, &parsedDomain)) {
+    if (freerdp_parse_username(normUsername.c_str(), &parsedUser, &parsedDomain)) {
       if (parsedDomain && strlen(parsedDomain) > 0) {
         freerdp_settings_set_string(settings, FreeRDP_Username, parsedUser);
         freerdp_settings_set_string(settings, FreeRDP_Domain, parsedDomain);

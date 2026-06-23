@@ -38,7 +38,7 @@ export function TunnelForm({ tunnel, onSubmit, onCancel }: Props) {
       name: name.trim(),
       hostname: hostname.trim(),
       port: portNum,
-      username: username.trim(),
+      username: username.trim().replace(/\//g, '\\'),
       password,
       rememberAfterSession: remember,
     });
