@@ -184,15 +184,36 @@ bool RdpSession::connect() {
         freerdp_settings_set_string(settings, FreeRDP_Domain, parsedDomain);
         fprintf(stderr, "[RDP] parsed domain='%s' user='%s' from username='%s'\n",
                 parsedDomain, parsedUser, username_.c_str());
+      } else {
+        freerdp_settings_set_string(settings, FreeRDP_Domain, ".");
       }
       free(parsedUser);
       free(parsedDomain);
+    } else {
+      freerdp_settings_set_string(settings, FreeRDP_Domain, ".");
     }
     fprintf(stderr, "[RDP] credentials: username='%s' domain='%s' password_len=%zu\n",
             freerdp_settings_get_string(settings, FreeRDP_Username),
             freerdp_settings_get_string(settings, FreeRDP_Domain) ? freerdp_settings_get_string(settings, FreeRDP_Domain) : "",
             strlen(password_.c_str()));
     fflush(stderr);
+  }
+#else
+  {
+    char* parsedUser = nullptr;
+    char* parsedDomain = nullptr;
+    if (freerdp_parse_username(username_.c_str(), &parsedUser, &parsedDomain)) {
+      if (parsedDomain && strlen(parsedDomain) > 0) {
+        freerdp_settings_set_string(settings, FreeRDP_Username, parsedUser);
+        freerdp_settings_set_string(settings, FreeRDP_Domain, parsedDomain);
+      } else {
+        freerdp_settings_set_string(settings, FreeRDP_Domain, ".");
+      }
+      free(parsedUser);
+      free(parsedDomain);
+    } else {
+      freerdp_settings_set_string(settings, FreeRDP_Domain, ".");
+    }
   }
 #endif
 

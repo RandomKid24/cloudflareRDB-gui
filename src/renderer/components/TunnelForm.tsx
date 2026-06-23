@@ -92,14 +92,34 @@ export function TunnelForm({ tunnel, onSubmit, onCancel }: Props) {
         />
       </Field>
 
-      <Field label={tunnel ? 'Password (leave blank to keep existing)' : 'Password'}>
-        <div style={{ position: 'relative' }}>
+      <Field
+        label={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <span>{tunnel ? 'Password' : 'Password'}</span>
+            {tunnel && (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: password ? 'var(--accent-amber)' : 'var(--accent-green)',
+                  background: password ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                }}
+              >
+                {password ? '✎ Updating password' : '✓ Saved password will be kept'}
+              </span>
+            )}
+          </div>
+        }
+      >
+        <div style={{ position: 'relative', width: '100%' }}>
           <input
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter password"
-            style={{ ...inputStyle, paddingRight: 36 }}
+            placeholder={tunnel ? '•••••••• (Saved)' : 'Enter password'}
+            style={{ ...inputStyle, paddingRight: 36, width: '100%', boxSizing: 'border-box' }}
           />
           <button
             type="button"
@@ -165,10 +185,12 @@ const HideIcon = (
   </svg>
 );
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>{label}</label>
+      <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {label}
+      </label>
       {children}
     </div>
   );
