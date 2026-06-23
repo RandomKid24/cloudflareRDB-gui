@@ -267,6 +267,7 @@ bool RdpSession::connect() {
   // manifests as the "packageName=N" / ERRCONNECT_AUTHENTICATION_FAILED error.
   // This call is idempotent — safe to call multiple times.
   sspi_GlobalInit();
+  fprintf(stderr, "[RDP] sspi_GlobalInit() called successfully\n");
   instance_ = freerdp_new();
   if (!instance_) {
     lastError_ = "freerdp_new failed";
