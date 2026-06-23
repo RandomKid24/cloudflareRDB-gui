@@ -82,6 +82,15 @@ static void ensureLegacyProvider() {
   } else {
     debugLog((std::string("OSSL_PROVIDER_load FAILED from ") + dir).c_str());
   }
+
+  // Explicitly load the default provider because loading any provider manually disables
+  // automatic loading of the default provider (which contains standard AES/SHA/RSA algorithms).
+  void* defProvider = pLoad(NULL, "default");
+  if (defProvider) {
+    debugLog("OSSL_PROVIDER_load SUCCESS: DEFAULT loaded");
+  } else {
+    debugLog("OSSL_PROVIDER_load FAILED: DEFAULT");
+  }
 }
 #endif
 
@@ -227,7 +236,11 @@ bool RdpSession::connect() {
   // Security: offer TLS and NLA, let server choose. Server requires HYBRID.
   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
-  freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, FALSE);
+  freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
+
+  // Set TLS security level to 1 (instead of OpenSSL 3.x default of 2).
+  // This allows connecting to servers with self-signed certificates or smaller key sizes (e.g. 1024-bit).
+  freerdp_settings_set_uint32(settings, FreeRDP_TlsSecLevel, 1);
 
   // Keep ignoring cert since we're going over a loopback tunnel
   freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
