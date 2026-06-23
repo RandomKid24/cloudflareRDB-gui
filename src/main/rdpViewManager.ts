@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, app } from 'electron';
 import path from 'path';
 const isWin = process.platform === 'win32';
 import { writeLog } from './logger';
@@ -81,6 +81,26 @@ export class RdpViewManager {
       this.disconnectView(tunnelId);
     }
 
+    const fs = require('fs');
+    const userDataPath = app.getPath('userData');
+    const logFilename = `freerdp-${tunnelId}.log`;
+    const logFilePath = path.join(userDataPath, logFilename);
+
+    // Truncate/clear the session-specific log file if it exists
+    try {
+      if (fs.existsSync(logFilePath)) {
+        fs.writeFileSync(logFilePath, '', 'utf-8');
+      }
+    } catch (e: any) {
+      writeLog(tunnelId, 'RDP View', 'warn', `Failed to truncate existing log file: ${e.message}`);
+    }
+
+    // Set environment variables before creating session
+    process.env.WLOG_APPENDER = 'file';
+    process.env.WLOG_FILEAPPENDER_OUTPUT_FILE_PATH = userDataPath;
+    process.env.WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = logFilename;
+    process.env.WLOG_LEVEL = 'DEBUG';
+
     try {
       const sessionId = this.addon.createSession(
         '127.0.0.1', port, width, height, username, password,
@@ -96,6 +116,9 @@ export class RdpViewManager {
       writeLog(tunnelId, 'RDP View', 'info', `RDP session created (id=${sessionId})`);
       return true;
     } catch (err: any) {
+      // Dump logs immediately on connection failure
+      this.dumpNativeLogs(tunnelId);
+
       const rawMsg = err.message || '';
 
       if (isWin && rawMsg.includes('code=131087')) {
@@ -139,8 +162,10 @@ export class RdpViewManager {
     const firstArg = args[0] !== undefined ? String(args[0]) : '';
     if (type === 'error') {
       writeLog(tunnelId, 'RDP View', 'error', `RDP connection error: ${firstArg}`);
+      this.dumpNativeLogs(tunnelId); // Dump logs on error event
     } else if (type === 'disconnected') {
       writeLog(tunnelId, 'RDP View', 'info', `RDP session disconnected: ${firstArg || 'Session closed'}`);
+      this.dumpNativeLogs(tunnelId); // Dump logs on disconnect event
     } else if (type === 'resize') {
       const width = args[0];
       const height = args[1];
@@ -155,6 +180,39 @@ export class RdpViewManager {
     } catch {}
     if (this.onEvent) {
       this.onEvent(tunnelId, type, ...args);
+    }
+  }
+
+  private dumpNativeLogs(tunnelId: string) {
+    const fs = require('fs');
+    const userDataPath = app.getPath('userData');
+    const logFilePath = path.join(userDataPath, `freerdp-${tunnelId}.log`);
+
+    try {
+      if (fs.existsSync(logFilePath)) {
+        const content = fs.readFileSync(logFilePath, 'utf-8');
+        const lines = content.split('\n').filter((l: string) => l.trim().length > 0);
+        // Take the last 40 lines
+        const lastLines = lines.slice(-40);
+        
+        writeLog(tunnelId, 'FreeRDP Engine', 'info', `--- Native FreeRDP Logs (Last ${lastLines.length} lines) ---`);
+        for (const line of lastLines) {
+          let level: 'info' | 'warn' | 'error' | 'debug' = 'debug';
+          const lowerLine = line.toLowerCase();
+          if (lowerLine.includes('error') || lowerLine.includes('fail') || lowerLine.includes('reject')) {
+            level = 'error';
+          } else if (lowerLine.includes('warn')) {
+            level = 'warn';
+          } else if (lowerLine.includes('info')) {
+            level = 'info';
+          }
+          
+          writeLog(tunnelId, 'FreeRDP Engine', level, line.trim());
+        }
+        writeLog(tunnelId, 'FreeRDP Engine', 'info', `------------------------------------------------------`);
+      }
+    } catch (err: any) {
+      writeLog(tunnelId, 'RDP Log Reader', 'error', `Failed to read native log file: ${err.message}`);
     }
   }
 

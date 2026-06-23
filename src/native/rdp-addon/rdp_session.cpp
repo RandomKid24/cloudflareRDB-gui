@@ -274,8 +274,15 @@ bool RdpSession::connect() {
 
   const char* actualHost = freerdp_settings_get_string(settings, FreeRDP_ServerHostname);
   UINT32 actualPort = freerdp_settings_get_uint32(settings, FreeRDP_ServerPort);
-  fprintf(stderr, "[RDP] freerdp_connect: host='%s' port=%u\n",
-          actualHost ? actualHost : "(null)", actualPort);
+  fprintf(stderr, "[RDP] AUTH_TUPLE: host='%s', port=%u, username='%s', domain='%s', password_len=%zu, IgnoreCertificate=%d, NlaSecurity=%d, TlsSecurity=%d\n",
+          actualHost ? actualHost : "(null)",
+          actualPort,
+          freerdp_settings_get_string(settings, FreeRDP_Username) ? freerdp_settings_get_string(settings, FreeRDP_Username) : "(null)",
+          freerdp_settings_get_string(settings, FreeRDP_Domain) ? freerdp_settings_get_string(settings, FreeRDP_Domain) : "(null)",
+          password_.length(),
+          freerdp_settings_get_bool(settings, FreeRDP_IgnoreCertificate) ? 1 : 0,
+          freerdp_settings_get_bool(settings, FreeRDP_NlaSecurity) ? 1 : 0,
+          freerdp_settings_get_bool(settings, FreeRDP_TlsSecurity) ? 1 : 0);
   fflush(stderr);
 
   BOOL connectResult = freerdp_connect(instance_);
