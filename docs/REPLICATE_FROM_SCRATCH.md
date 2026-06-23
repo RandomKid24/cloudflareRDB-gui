@@ -372,7 +372,6 @@ export interface AppSettings {
   cloudflaredPath: string;
   launchOnStartup: boolean;
   startMinimizedToTray: boolean;
-  theme: 'light' | 'dark' | 'system';
   autoReconnectAttempts: number;       // default 3
   forgetPasswordAfterSession: boolean; // default true
 }
@@ -421,7 +420,7 @@ interface Schema { tunnels: TunnelConfig[]; settings: AppSettings; }
 
 const DEFAULT_SETTINGS: AppSettings = {
   cloudflaredPath: '', launchOnStartup: false, startMinimizedToTray: false,
-  theme: 'dark', autoReconnectAttempts: 3, forgetPasswordAfterSession: true,
+  autoReconnectAttempts: 3, forgetPasswordAfterSession: true,
 };
 
 export const store = new Store<Schema>({
@@ -1483,7 +1482,7 @@ Displays filtered log entries from the 500-entry ring buffer. Uses `LogViewer` c
 
 ### Settings View (`src/renderer/views/Settings.tsx`)
 
-Settings form: Cloudflared path, launch on startup, start minimized, theme, auto-reconnect attempts, forget password after session.
+Settings form: Cloudflared path, launch on startup, start minimized, auto-reconnect attempts, forget password after session.
 
 ---
 
