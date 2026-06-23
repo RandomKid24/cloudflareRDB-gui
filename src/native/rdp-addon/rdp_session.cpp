@@ -343,10 +343,16 @@ bool RdpSession::connect() {
     fflush(stderr);
   }
 
-  // Security: offer TLS and NLA, let server choose. Server requires HYBRID.
-  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
+  // Security: TLS + RDP always.
   freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
+  // NLA: disabled on Windows (SSPI SPN check fails over tunnel to localhost),
+  // enabled on Mac/Linux (standard Kerberos/NTLM via FreeRDP's internal NLA).
+#ifdef _WIN32
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
+#else
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
+#endif
 
   // Set TLS security level to 1 (instead of OpenSSL 3.x default of 2).
   // This allows connecting to servers with self-signed certificates or smaller key sizes (e.g. 1024-bit).
