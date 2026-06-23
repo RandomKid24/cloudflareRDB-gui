@@ -33,7 +33,11 @@ export class RdpViewManager {
 
   constructor() {
     try {
-      const addonDir = path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release');
+      const fs = require('fs');
+      let addonDir = path.join(__dirname, '..', '..', 'native', 'rdp-addon', 'build', 'Release');
+      if (!fs.existsSync(path.join(addonDir, 'rdp_addon.node'))) {
+        addonDir = path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release');
+      }
       const addonPath = path.join(addonDir, 'rdp_addon.node');
 
       if (isWin) {

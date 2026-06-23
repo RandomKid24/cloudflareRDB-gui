@@ -1,5 +1,6 @@
 #include "rdp_session.h"
 #include <freerdp/settings.h>
+#include <freerdp/version.h>
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/input.h>
 #include <winpr/wlog.h>
