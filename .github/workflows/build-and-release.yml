@@ -142,39 +142,48 @@ jobs:
           Write-Host "=== cmake toolchain ==="
           Test-Path C:\vcpkg\scripts\buildsystems\vcpkg.cmake
 
-      - name: Copy OpenSSL LEGACY provider (Windows)
+      - name: Build desktop artifacts
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: ${{ matrix.build_command }}
+
+      - name: Copy OpenSSL LEGACY provider into packaged app (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $searchDirs = @(
             "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\ossl-modules",
+            "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\ossl-modules",
             "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin",
             "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib"
           )
-          $targetDir = "native\rdp-addon\build\Release"
-          New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
-          Write-Host "Target: $targetDir"
+          # OpenSSL 3.x requires providers in <dll_dir>/ossl-modules/ by default.
+          # We also set OPENSSL_MODULES=addonDir at runtime, so copy to both.
+          $releaseDir = "native\rdp-addon\build\Release"
+          $osslModulesDir = "native\rdp-addon\build\Release\ossl-modules"
+          New-Item -ItemType Directory -Force -Path $osslModulesDir | Out-Null
+          Write-Host "Flat target:    $releaseDir"
+          Write-Host "Module target:  $osslModulesDir"
           $copied = $false
           foreach ($dir in $searchDirs) {
             if (Test-Path -LiteralPath $dir) {
               $files = Get-ChildItem -Path $dir -Filter "*legacy*"
               foreach ($f in $files) {
-                Copy-Item -Path $f.FullName -Destination $targetDir -Force
-                Write-Host "Copied: $($f.FullName) -> $targetDir"
+                Copy-Item -Path $f.FullName -Destination $releaseDir -Force
+                Copy-Item -Path $f.FullName -Destination $osslModulesDir -Force
+                Write-Host "Copied: $($f.FullName) -> $releaseDir + $osslModulesDir"
                 $copied = $true
               }
             }
+            if ($copied) { break }
           }
           if (-not $copied) {
-            Write-Host "WARNING: No LEGACY provider found!"
+            Write-Host "WARNING: No LEGACY provider found! NTLM/NLA will fail."
           }
-          Write-Host "=== rdp-addon DLL dir contents ==="
-          Get-ChildItem -Path $targetDir | Select-Object Name, Length
-
-      - name: Build desktop artifacts
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: ${{ matrix.build_command }}
+          Write-Host "=== rdp-addon Release dir ==="
+          Get-ChildItem -Path $releaseDir -ErrorAction SilentlyContinue | Select-Object Name, Length
+          Write-Host "=== rdp-addon ossl-modules dir ==="
+          Get-ChildItem -Path $osslModulesDir -ErrorAction SilentlyContinue | Select-Object Name, Length
 
       - name: Verify addon compiled (Windows)
         if: runner.os == 'Windows'
@@ -185,6 +194,11 @@ jobs:
           } else {
             Write-Host "rdp_addon.node not found in build output"
             exit 1
+          }
+          if (Test-Path -Path "native/rdp-addon/build/Release/ossl-modules/legacy.dll") {
+            Write-Host "ossl-modules/legacy.dll present - MD4/NTLM support available"
+          } else {
+            Write-Host "WARNING: ossl-modules/legacy.dll NOT found - NTLM/NLA will fail!"
           }
 
       - name: Verify addon compiled (macOS)

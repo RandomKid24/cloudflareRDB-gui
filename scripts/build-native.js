@@ -204,17 +204,29 @@ if (isWin) {
       console.log(`  Copied dependency ${dll}`);
     }
   }
+  // OpenSSL 3.x loads providers from <dll_dir>/ossl-modules/ by default,
+  // but we also set OPENSSL_MODULES=addonDir at runtime, so copy to both locations.
+  const osslModulesDir = path.join(addonOutDir, 'ossl-modules');
+  fs.mkdirSync(osslModulesDir, { recursive: true });
   const legacyPaths = [
-    path.join(binDir, 'legacy.dll'),
     path.join(binDir, 'ossl-modules', 'legacy.dll'),
     path.join(freerdpRoot, 'lib', 'ossl-modules', 'legacy.dll'),
+    path.join(binDir, 'legacy.dll'),
   ];
+  let legacyCopied = false;
   for (const lp of legacyPaths) {
     if (fs.existsSync(lp)) {
+      // Copy to flat dir (for OPENSSL_MODULES=addonDir at runtime)
       fs.copyFileSync(lp, path.join(addonOutDir, 'legacy.dll'));
-      console.log(`  Copied legacy provider ${path.basename(lp)}`);
+      // Also copy to ossl-modules/ subdirectory (default OpenSSL 3.x provider path)
+      fs.copyFileSync(lp, path.join(osslModulesDir, 'legacy.dll'));
+      console.log(`  Copied legacy provider ${lp} -> legacy.dll + ossl-modules/legacy.dll`);
+      legacyCopied = true;
       break;
     }
+  }
+  if (!legacyCopied) {
+    console.warn('  WARNING: legacy.dll not found — NTLM/NLA will fail on NTLM-only servers!');
   }
 }
 

@@ -36,7 +36,10 @@ export class RdpViewManager {
 
       if (isWin) {
         process.env.PATH = `${addonDir};${process.env.PATH}`;
-        process.env.OPENSSL_MODULES = addonDir;
+        // OpenSSL 3.x loads providers from the directory pointed to by OPENSSL_MODULES.
+        // We place legacy.dll in <addonDir>/ossl-modules/ so set accordingly.
+        const osslModulesDir = path.join(addonDir, 'ossl-modules');
+        process.env.OPENSSL_MODULES = osslModulesDir;
       }
 
       this.addon = require(addonPath) as RdpAddon;
