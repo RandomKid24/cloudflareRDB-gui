@@ -14,6 +14,7 @@ declare global {
         onStatusChange: (callback: (state: TunnelRuntimeState) => void) => () => void;
         onLog: (callback: (entry: Omit<LogEntry, 'id' | 'timestamp'>) => void) => () => void;
         onTrayConnect: (callback: (tunnelId: string) => void) => () => void;
+        decryptPassword: (encryptedBase64: string) => Promise<string>;
       };
       settings: {
         get: () => Promise<AppSettings>;

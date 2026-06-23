@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TunnelConfig } from '../../shared/types';
 
 interface Props {
@@ -13,9 +13,21 @@ export function TunnelForm({ tunnel, onSubmit, onCancel }: Props) {
   const [port, setPort] = useState(tunnel?.port ?? 3389);
   const [username, setUsername] = useState(tunnel?.username ?? '');
   const [password, setPassword] = useState('');
+  const [initialPassword, setInitialPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(tunnel?.rememberAfterSession ?? true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (tunnel && tunnel.encryptedPassword) {
+      window.cloudflareRdp.tunnels.decryptPassword(tunnel.encryptedPassword)
+        .then((decrypted) => {
+          setPassword(decrypted);
+          setInitialPassword(decrypted);
+        })
+        .catch(() => {});
+    }
+  }, [tunnel]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,19 +107,19 @@ export function TunnelForm({ tunnel, onSubmit, onCancel }: Props) {
       <Field
         label={
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-            <span>{tunnel ? 'Password' : 'Password'}</span>
+            <span>Password</span>
             {tunnel && (
               <span
                 style={{
                   fontSize: 11,
                   fontWeight: 600,
-                  color: password ? 'var(--accent-amber)' : 'var(--accent-green)',
-                  background: password ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)',
+                  color: password !== initialPassword ? 'var(--accent-amber)' : 'var(--accent-green)',
+                  background: password !== initialPassword ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)',
                   padding: '2px 6px',
                   borderRadius: 4,
                 }}
               >
-                {password ? '✎ Updating password' : '✓ Saved password will be kept'}
+                {password !== initialPassword ? '✎ Updating password' : '✓ Saved password'}
               </span>
             )}
           </div>
@@ -118,7 +130,7 @@ export function TunnelForm({ tunnel, onSubmit, onCancel }: Props) {
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={tunnel ? '•••••••• (Saved)' : 'Enter password'}
+            placeholder="Enter password"
             style={{ ...inputStyle, paddingRight: 36, width: '100%', boxSizing: 'border-box' }}
           />
           <button

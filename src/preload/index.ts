@@ -47,6 +47,9 @@ const api = {
         ipcRenderer.removeListener('tray-connect', handler);
       };
     },
+
+    decryptPassword: (encryptedBase64: string): Promise<string> =>
+      ipcRenderer.invoke('tunnels:decrypt-password', encryptedBase64),
   },
 
   settings: {

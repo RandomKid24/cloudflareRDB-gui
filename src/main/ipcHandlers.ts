@@ -14,6 +14,14 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
     return getTunnels();
   });
 
+  ipcMain.handle('tunnels:decrypt-password', async (_event, encryptedBase64: string) => {
+    try {
+      return credentialStore.decrypt(encryptedBase64);
+    } catch {
+      return '';
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.TUNNELS_ADD, async (_event, data: TunnelFormData) => {
     if (!credentialStore.isEncryptionAvailable()) {
       throw new Error('Encryption is not available on this system. Cannot store credentials securely.');
