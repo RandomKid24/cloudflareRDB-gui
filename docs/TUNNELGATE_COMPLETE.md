@@ -214,7 +214,7 @@ TunnelGate wraps `cloudflared access tcp` into a GUI:
 
 ### `src/main/index.ts` — App Entry
 
-- Theme system: supports Dark, Light, System, Transparent (semi-transparent backgrounds), Nordic (blue-gray palette), Sunset (warm purple/orange). Theme is persisted in settings and applied via CSS classes on `<html>`. System theme reacts to `prefers-color-scheme` media query changes.
+- Theme system: Dark theme only (all other themes removed — Light, System, Transparent, Nordic, Sunset were eliminated to simplify the UI).
 - Creates tray with 4 programmatic icons (idle/connecting/connected/error as 16×16 RGBA circles)
 - Creates BrowserWindow (1000×700, min 900×600)
 - Loads Vite dev server (port 5173) in dev or `dist/renderer/index.html` in prod
@@ -314,7 +314,7 @@ Security: `contextIsolation: true`, `nodeIntegration: false`.
 | Tunnels | `views/Tunnels.tsx` | Tunnel list with CRUD, animated status dots, connection duration timer, last-connected timestamps, port badges, hover effects |
 | RdpView | `views/RdpView.tsx` | RDP viewer with toolbar, canvas, error/password-update overlays. Fullscreen delegated to OS (F11/window manager) |
 | Logs | `views/Logs.tsx` | Filtered log viewer with tunnel chips, search/filter box, auto-scroll toggle, level badges, clear button |
-| Settings | `views/Settings.tsx` | Cloudflared path, auto-start, reconnect count, theme (Dark/Light/System/Transparent/Nordic/Sunset), tooltips on all settings, section dividers |
+| Settings | `views/Settings.tsx` | Cloudflared path, auto-start, reconnect count, tooltips on all settings, section dividers |
 
 ### Components
 
@@ -324,7 +324,7 @@ Security: `contextIsolation: true`, `nodeIntegration: false`.
 | TunnelForm | `components/TunnelForm.tsx` | Add/edit form with hostname validation, password toggle |
 | RdpCanvas | `components/RdpCanvas.tsx` | Double-buffered canvas rendering RDP frames |
 | LogViewer | `components/LogViewer.tsx` | Scrollable log with auto-scroll toggle, search/filter box, level badges (ERROR/WARN/INFO/DEBUG), millisecond timestamps, clear button, export |
-| Settings | `views/Settings.tsx` | Section dividers, tooltips on every setting, theme selector (Dark/Light/System/Transparent/Nordic/Sunset), cloudflared path browser |
+| Settings | `views/Settings.tsx` | Section dividers, tooltips on every setting, cloudflared path browser |
 
 ### Hooks
 
@@ -647,7 +647,7 @@ Stored as JSON in electron-store default location (`tunnelgate-config`):
   cloudflaredPath: string,        // default ""
   launchOnStartup: boolean,       // default false
   startMinimizedToTray: boolean,   // default false
-  theme: 'dark' | 'light' | 'system' | 'transparent' | 'nordic' | 'sunset', // default 'dark'
+  // theme removed — only dark theme is supported now
   autoReconnectAttempts: number,  // default 3
   forgetPasswordAfterSession: boolean  // default true
 }
