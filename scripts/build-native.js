@@ -59,6 +59,34 @@ fs.mkdirSync(addonOutDir, { recursive: true });
   console.log(`  cmake: ${r.stdout.split('\n')[0]}`);
 }
 
+// Detect the actual installed Visual Studio generator for CMake using vswhere
+function detectVsGenerator() {
+  const vswhere = path.join(
+    process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
+    'Microsoft Visual Studio', 'Installer', 'vswhere.exe'
+  );
+  if (fs.existsSync(vswhere)) {
+    const r = spawnSync(vswhere, [
+      '-latest',
+      '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
+      '-property', 'catalog_productLineVersion'
+    ], { encoding: 'utf8' });
+    if (r.status === 0 && r.stdout.trim()) {
+      const year = r.stdout.trim();
+      const versionMap = { '2026': '18', '2025': '18', '2022': '17', '2019': '16', '2017': '15' };
+      const version = versionMap[year];
+      if (version) {
+        const generator = `Visual Studio ${version} ${year}`;
+        console.log(`  Detected VS generator: ${generator}`);
+        return generator;
+      }
+    }
+  }
+  // Fallback to cmake-js style detection — try cmake --help but filter by actual registry
+  console.warn('  vswhere not available — falling back to Visual Studio 17 2022');
+  return 'Visual Studio 17 2022';
+}
+
 // ---------------------------------------------------------------
 // Determine FreeRDP root (shared between cmake config and dylib copy)
 // ---------------------------------------------------------------
@@ -78,7 +106,7 @@ if (isWin) {
   }
 
   configArgs = [
-    '-G', 'Visual Studio 17 2022',
+    '-G', detectVsGenerator(),
     '-A', 'x64',
     `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`,
     `-DVCPKG_TARGET_TRIPLET=x64-windows`,
