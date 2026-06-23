@@ -1,10 +1,8 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { LogEntry } from '../../shared/types';
 
 interface Props {
   logs: LogEntry[];
-  autoScroll: boolean;
-  setAutoScroll: (v: boolean) => void;
   onExport: () => void;
   filterTunnelId?: string;
 }
@@ -16,29 +14,17 @@ const levelColors: Record<string, string> = {
   debug: 'var(--text-muted)',
 };
 
-export function LogViewer({ logs, autoScroll, setAutoScroll, onExport, filterTunnelId }: Props) {
+export function LogViewer({ logs, onExport, filterTunnelId }: Props) {
+  const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const filtered = filterTunnelId
     ? logs.filter((l) => l.tunnelId === filterTunnelId)
     : logs;
 
-  const handleScroll = useCallback(() => {
-    if (!containerRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    const atBottom = scrollHeight - scrollTop - clientHeight < 50;
-    if (!atBottom && autoScroll) {
-      setAutoScroll(false);
-    } else if (atBottom && !autoScroll) {
-      setAutoScroll(true);
-    }
-  }, [autoScroll, setAutoScroll]);
-
   useEffect(() => {
-    if (autoScroll && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
-  }, [filtered.length, autoScroll]);
+    bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+  }, [filtered.length]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -47,20 +33,6 @@ export function LogViewer({ logs, autoScroll, setAutoScroll, onExport, filterTun
           Logs {filterTunnelId ? '(filtered)' : ''} — {filtered.length} entries
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => setAutoScroll(!autoScroll)}
-            style={{
-              padding: '2px 8px',
-              fontSize: 11,
-              border: '1px solid var(--border-color)',
-              borderRadius: 4,
-              background: autoScroll ? 'var(--accent-blue)' : 'transparent',
-              color: autoScroll ? '#fff' : 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
-          >
-            {autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
-          </button>
           <button
             onClick={onExport}
             style={{
@@ -79,7 +51,6 @@ export function LogViewer({ logs, autoScroll, setAutoScroll, onExport, filterTun
       </div>
       <div
         ref={containerRef}
-        onScroll={handleScroll}
         style={{
           flex: 1,
           overflowY: 'auto',
@@ -110,6 +81,7 @@ export function LogViewer({ logs, autoScroll, setAutoScroll, onExport, filterTun
             </div>
           ))
         )}
+        <div ref={bottomRef} />
       </div>
     </div>
   );

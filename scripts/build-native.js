@@ -78,7 +78,7 @@ if (isWin) {
   }
 
   configArgs = [
-    '-G', 'Visual Studio 18 2026',
+    '-G', 'Visual Studio 17 2022',
     '-A', 'x64',
     `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`,
     `-DVCPKG_TARGET_TRIPLET=x64-windows`,
@@ -91,7 +91,7 @@ if (isWin) {
     `-DNODE_RUNTIME=electron`,
     `-DNODE_RUNTIMEVERSION=${ELECTRON_VERSION}`,
     `-DNODE_ARCH=x64`,
-    `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded`,
+    `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL`,
     `-DCMAKE_SHARED_LINKER_FLAGS=/DELAYLOAD:NODE.EXE`,
     srcDir,
   ];
@@ -228,6 +228,27 @@ if (isWin) {
   if (!legacyCopied) {
     console.warn('  WARNING: legacy.dll not found — NTLM/NLA will fail on NTLM-only servers!');
   }
+
+  // Write OpenSSL config to auto-load the legacy provider (needed for RC4 during RDP licensing)
+  const opensslCnf = [
+    'openssl_conf = openssl_init',
+    '',
+    '[openssl_init]',
+    'providers = provider_sect',
+    '',
+    '[provider_sect]',
+    'default = default_sect',
+    'legacy = legacy_sect',
+    '',
+    '[default_sect]',
+    'activate = 1',
+    '',
+    '[legacy_sect]',
+    'activate = 1',
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(addonOutDir, 'openssl.cnf'), opensslCnf, 'utf-8');
+  console.log('  Wrote openssl.cnf');
 }
 
 if (isMac) {

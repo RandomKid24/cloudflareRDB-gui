@@ -3,7 +3,7 @@ import { LogEntry } from '../../shared/types';
 
 export function useLogs() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [autoScroll, setAutoScroll] = useState(true);
+
   const ringRef = useRef<LogEntry[]>([]);
   const rafRef = useRef<number | null>(null);
   const pendingRef = useRef<LogEntry[]>([]);
@@ -51,5 +51,5 @@ export function useLogs() {
     await window.cloudflareRdp.tunnels.exportLogs(tunnelId);
   }, []);
 
-  return { logs, autoScroll, setAutoScroll, exportLogs };
+  return { logs, exportLogs };
 }

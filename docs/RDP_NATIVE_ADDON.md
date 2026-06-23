@@ -253,6 +253,16 @@ Wrap `createImageData`/`putImageData` in try/catch - can throw on invalid dimens
 - `BlockingCall` is safe from pump thread; `NonBlockingCall` also available
 - Frame data is `Buffer<uint8_t>::Copy()` - the pump thread owns the original data
 
+### Windows OpenSSL Legacy Provider (RC4)
+- FreeRDP 3 on Windows requires OpenSSL legacy provider for RC4 during RDP licensing
+- `GetModuleFileNameA` returns `\\?\` extended-length prefix paths; OpenSSL DSO loader rejects this syntax
+- `normalizePath()` strips `\\?\` prefix before setting `OPENSSL_MODULES`/`OPENSSL_CONF`
+- Global C++ `EnvVarInitializer` at DLL load time writes `openssl.cnf` and calls `_putenv_s` for both vars
+- `_putenv_s` overrides `process.env` from Node.js since C++ initializer runs after JS setup
+- `ensureLegacyProvider()` loads legacy + default providers and verifies `EVP_rc4()` is available
+- WinPR RC4 init simulation confirms full RC4 availability before RDP session starts
+- DLLs `legacy.dll` and `ossl-modules/` are deployed alongside `rdp_addon.node`
+
 ---
 
 ## Lessons Learned (Bugs We Fixed)
@@ -273,7 +283,27 @@ Wrap `createImageData`/`putImageData` in try/catch - can throw on invalid dimens
 **Fix**: Set `hardenedRuntime: false`, use `CSC_IDENTITY_AUTO_DISCOVERY=false`, then manually
 replace Framework from `node_modules` and `codesign --deep` manually.
 
-### Bug 4: Stale Paint Closure
+### Bug 5: OpenSSL DSO `\\?\` Path Prefix
+**Symptom**: `OSSL_PROVIDER_load("legacy")` fails with DSO error `error:12800073:DSO support routines::incorrect file syntax`
+**Cause**: `GetModuleFileNameA` on Windows returns paths with `\\?\` extended-length prefix (e.g., `\\?\C:\Users\...`). OpenSSL's DSO module loader does not understand this syntax.
+**Fix**: `normalizePath()` strips `\\?\` prefix from the module path before passing to `OPENSSL_MODULES` env var.
+
+### Bug 6: FreeRDP 3 API Migration
+**Symptom**: Compile error `'struct rdp_context' has no member named 'settings'`
+**Cause**: FreeRDP 3 moved `settings` from `instance->settings` to `instance->context->settings` for static callbacks.
+**Fix**: All static callbacks (`endPaint`, `desktopResize`, `postConnect`) access settings via `instance->context->settings`.
+
+### Bug 7: CRT Runtime Mismatch (`/MT` vs `/MD`)
+**Symptom**: Heap corruption or crash in FreeRDP memory allocation across DLL boundary.
+**Cause**: FreeRDP DLLs are built with `/MD` (dynamic CRT) but the addon was compiled with `/MT` (static CRT). Each has a separate CRT heap; allocations on one heap freed on the other cause corruption.
+**Fix**: Switch CMakeLists.txt to `/MD` to share CRT heap with FreeRDP.
+
+### Bug 8: CSS-Only Fullscreen Shows Taskbar
+**Symptom**: Taskbar overlaps the RDP canvas in fullscreen mode, and the toolbar pushes the remote desktop down so the bottom (taskbar) is clipped.
+**Cause**: Fullscreen was implemented as `position: fixed; inset: 0` (CSS-only) instead of the native Fullscreen API. The toolbar consumed 48px at the top, clipping the remote desktop.
+**Fix**: Use `document.documentElement.requestFullscreen()` / `document.exitFullscreen()` to enter true OS fullscreen. In fullscreen, the toolbar is absolutely positioned with `opacity: 0.15` and reveals to full opacity on hover.
+
+### Bug 4 (original): Stale Paint Closure
 **Symptom**: (Potential) paint uses old width/height after resize.
 **Cause**: `useCallback(paint, [width, height])` + rAF captures stale values.
 **Fix**: Use refs and empty deps `useCallback(paint, [])`.

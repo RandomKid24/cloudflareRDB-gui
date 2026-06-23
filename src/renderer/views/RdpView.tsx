@@ -55,8 +55,36 @@ export function RdpView({ tunnel, onBack }: Props) {
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [updateError, setUpdateError] = useState('');
   const [showPasswordExpired, setShowPasswordExpired] = useState(false);
+  const [toolbarHover, setToolbarHover] = useState(false);
+  const [canvasWidth, setCanvasWidth] = useState(DEFAULT_WIDTH);
+  const [canvasHeight, setCanvasHeight] = useState(DEFAULT_HEIGHT);
   const active = tunnel?.runtime.status === 'connected';
   const passwordInputRef = useRef<HTMLInputElement>(null);
+  const connectSizeRef = useRef({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
+
+  // Track canvas wrapper size for dynamic RDP resolution
+  // connectSizeRef is used for the initial RDP connect (no reconnect on resize)
+  // canvasWidth/canvasHeight state updates the canvas rendering
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const toolbarEl = toolbarRef.current;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { inlineSize, blockSize } = entry.borderBoxSize?.[0] ?? entry.contentBoxSize?.[0] ?? { inlineSize: DEFAULT_WIDTH, blockSize: DEFAULT_HEIGHT };
+        const w = Math.max(640, Math.min(2560, Math.round(inlineSize)));
+        let h = Math.max(480, Math.min(1440, Math.round(blockSize)));
+        if (!fullscreen && toolbarEl) {
+          h = Math.max(480, Math.min(1440, h - toolbarEl.offsetHeight));
+        }
+        connectSizeRef.current = { width: w, height: h };
+        setCanvasWidth((prev) => prev === w ? prev : w);
+        setCanvasHeight((prev) => prev === h ? prev : h);
+      }
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [fullscreen]);
 
   useEffect(() => {
     window.cloudflareRdp.rdp.isAvailable()
@@ -89,7 +117,8 @@ export function RdpView({ tunnel, onBack }: Props) {
       setError('');
       setPasswordUpdateRequired(false);
       try {
-        await window.cloudflareRdp.rdp.connect(tunnel.id);
+        const { width, height } = connectSizeRef.current;
+        await window.cloudflareRdp.rdp.connect(tunnel.id, width, height);
         setStatus('connected');
       } catch (err: any) {
         const msg = err.message || 'Failed to connect RDP view';
@@ -118,6 +147,14 @@ export function RdpView({ tunnel, onBack }: Props) {
           setError(msg);
         }
       }
+      if (type === 'resize') {
+        const w = args[0];
+        const h = args[1];
+        if (typeof w === 'number' && typeof h === 'number' && w > 0 && h > 0) {
+          setCanvasWidth(w);
+          setCanvasHeight(h);
+        }
+      }
     });
 
     return () => {
@@ -139,9 +176,35 @@ export function RdpView({ tunnel, onBack }: Props) {
     onBack();
   }, [tunnel, onBack]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+
   const toggleFullscreen = useCallback(() => {
-    setFullscreen((f) => !f);
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
   }, []);
+
+  useEffect(() => {
+    const onFSChange = () => {
+      setFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFSChange);
+    return () => document.removeEventListener('fullscreenchange', onFSChange);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !passwordUpdateRequired) {
+        e.stopPropagation();
+        handleBack();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [handleBack, passwordUpdateRequired]);
 
   const handleUpdatePassword = useCallback(async () => {
     if (!tunnel || !newPassword.trim()) return;
@@ -178,7 +241,8 @@ export function RdpView({ tunnel, onBack }: Props) {
     await window.cloudflareRdp.rdp.disconnect(tunnel.id).catch(() => {});
     setStatus('connecting');
     try {
-      await window.cloudflareRdp.rdp.connect(tunnel.id);
+      const { width, height } = connectSizeRef.current;
+      await window.cloudflareRdp.rdp.connect(tunnel.id, width, height);
       setStatus('connected');
     } catch (err: any) {
       const msg = err.message || 'Failed to connect RDP view';
@@ -206,23 +270,40 @@ export function RdpView({ tunnel, onBack }: Props) {
   }
 
   const containerStyle: React.CSSProperties = fullscreen
-    ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: '#000' }
+    ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: '#000', display: 'flex', flexDirection: 'column' }
     : { height: '100%', display: 'flex', flexDirection: 'column', background: '#000' };
 
-  const toolbarStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    padding: '8px 16px',
-    background: fullscreen ? 'rgba(0,0,0,0.8)' : 'var(--bg-secondary)',
-    color: '#fff',
-    fontSize: 13,
-    flexShrink: 0,
-  };
+  const toolbarStyle: React.CSSProperties = fullscreen
+    ? {
+        position: 'absolute',
+        top: 0, left: 0, right: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '8px 16px',
+        background: toolbarHover ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.4)',
+        color: '#fff',
+        fontSize: 13,
+        zIndex: 10,
+        opacity: toolbarHover ? 1 : 0.15,
+        transition: 'opacity 0.2s',
+      }
+    : {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '8px 16px',
+        background: 'var(--bg-secondary)',
+        color: '#fff',
+        fontSize: 13,
+        flexShrink: 0,
+      };
 
   return (
-    <div style={containerStyle}>
-      <div style={toolbarStyle}>
+    <div ref={containerRef} style={containerStyle}>
+      <div ref={toolbarRef} style={toolbarStyle}
+        onMouseEnter={() => setToolbarHover(true)}
+        onMouseLeave={() => setToolbarHover(false)}>
         <button onClick={handleBack} style={toolbarBtnStyle}>← Back</button>
         <span style={{ fontWeight: 600 }}>{tunnel.name}</span>
         <span style={{ opacity: 0.6 }}>
@@ -407,7 +488,7 @@ export function RdpView({ tunnel, onBack }: Props) {
       )}
 
       {status === 'connected' && (
-        <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
           {navigator.userAgent.toLowerCase().includes('win') && (
             <div style={{
               position: 'absolute',
@@ -429,8 +510,8 @@ export function RdpView({ tunnel, onBack }: Props) {
           )}
           <RdpCanvas
             tunnelId={tunnel.id}
-            width={DEFAULT_WIDTH}
-            height={DEFAULT_HEIGHT}
+            width={canvasWidth}
+            height={canvasHeight}
             connected={true}
           />
         </div>

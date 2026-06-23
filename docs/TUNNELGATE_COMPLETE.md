@@ -250,6 +250,7 @@ All handlers:
 ### `src/main/rdpViewManager.ts` — Native Addon Bridge
 
 - Loads `native/rdp-addon/build/Release/rdp_addon.node` from `process.resourcesPath`
+- Sets `OPENSSL_MODULES` and `OPENSSL_CONF` env vars in the main process before loading the addon (C++ `EnvVarInitializer` overrides these via `_putenv_s` at DLL load time)
 - `connectView()` → calls `addon.createSession()`:
   - Connects to `127.0.0.1:<port>` (tunneled localhost)
   - Passes `forwardFrame()` for bitmap data → sends `rdp:frame` IPC
@@ -310,7 +311,7 @@ Security: `contextIsolation: true`, `nodeIntegration: false`.
 | View | File | Purpose |
 |------|------|---------|
 | Tunnels | `views/Tunnels.tsx` | Tunnel list with CRUD, connect/disconnect, "View Screen" button |
-| RdpView | `views/RdpView.tsx` | Full-screen canvas + toolbar + error/password-update overlays |
+| RdpView | `views/RdpView.tsx` | Full-screen RDP viewer with auto-hide toolbar (Fullscreen API) + error/password-update overlays |
 | Logs | `views/Logs.tsx` | Filtered log viewer with tunnel chips |
 | Settings | `views/Settings.tsx` | Cloudflared path, auto-start, reconnect count, theme |
 
@@ -348,6 +349,10 @@ connectView succeeded      → RdpCanvas rendered
 connectView threw          → Error banner + Retry / Open Native Client / Cancel
 password expired detected  → Amber dialog with password input + "Update & Reconnect"
 ```
+
+### RdpView Fullscreen
+
+Fullscreen uses the native Fullscreen API (`document.documentElement.requestFullscreen()`) which hides the OS taskbar and window chrome. The toolbar is absolutely positioned over the canvas with `opacity: 0.15` by default and reveals to full opacity on mouse hover. This ensures the RDP canvas fills the entire screen without clipping the remote desktop.
 
 ---
 
@@ -410,6 +415,13 @@ password expired detected  → Amber dialog with password input + "Update & Reco
 - `onResize`/`onDisconnect`/`onError`: all reuse the same `onEvent` JS callback
 
 **Session registry:** `static std::map<int, SessionHolder>` with mutex, auto-incrementing IDs
+
+**Windows OpenSSL setup (global `EnvVarInitializer`):**
+- Runs at DLL load time (static global constructor in `rdp_session.cpp`)
+- Writes `openssl.cnf` config: `openssl_conf = openssl_init`, `providers = provider_sect`, `legacy = legacy_sect`
+- Sets `OPENSSL_MODULES` and `OPENSSL_CONF` via `_putenv_s` (overrides any Node.js `process.env` value)
+- `ensureLegacyProvider()` loads legacy + default providers, verifies `EVP_rc4()` is available
+- `normalizePath()` strips `\\?\` prefix from module path before passing to env vars
 
 ### `CMakeLists.txt`
 
@@ -529,7 +541,7 @@ User clicks "Disconnect" or "← Back"
 |---------|---------|-------|-------|
 | **Native RDP client** | `mstsc.exe` | Microsoft Remote Desktop | `xfreerdp` / `remmina` |
 | **Credential injection** | `cmdkey` (Windows Credential Manager) | Skipped | Skipped |
-| **NLA setting** | `NlaSecurity=FALSE`, `TlsSecurity=TRUE` | `NlaSecurity=TRUE` | `NlaSecurity=TRUE` |
+| **NLA setting** | `NlaSecurity=TRUE`, `TlsSecurity=TRUE` | `NlaSecurity=TRUE` | `NlaSecurity=TRUE` |
 | **FreeRDP source** | vcpkg `freerdp:x64-windows` | Homebrew `freerdp` | `apt install freerdp2-dev` |
 | **Build generator** | Visual Studio 2022 | Unix Makefiles | Unix Makefiles |
 | **Dylib handling** | Copy DLLs + deps from vcpkg | Copy .dylib, `install_name_tool`, ad-hoc sign | No extra step |
@@ -539,9 +551,13 @@ User clicks "Disconnect" or "← Back"
 | **Window close** | Hide to tray | Don't quit (macOS standard) | Hide to tray |
 | **Pump sleep** | `Sleep(10)` | `usleep(10000)` | `usleep(10000)` |
 
-### Windows-Specific FreeRDP Issue
+### Windows-Specific FreeRDP Issues
 
-FreeRDP on Windows uses native Windows SSPI for NLA, which can falsely report `ERRCONNECT_PASSWORD_EXPIRED` (code 131087) even when the password is valid. This is caused by stale Kerberos tickets or cached domain credentials. The workaround disables NLA and uses TLS security instead.
+**1. Password Expired False Positive (131087):**
+FreeRDP on Windows uses native Windows SSPI for NLA, which can falsely report `ERRCONNECT_PASSWORD_EXPIRED` (code 131087) even when the password is valid. This is caused by stale Kerberos tickets or cached domain credentials. Intercepted in `rdpViewManager.ts` and replaced with a generic NLA error message.
+
+**2. OpenSSL Legacy Provider for RC4:**
+FreeRDP 3 on Windows requires the OpenSSL legacy provider for RC4 during RDP licensing negotiation. The addon's C++ `EnvVarInitializer` writes an `openssl.cnf` config file and sets `OPENSSL_MODULES` + `OPENSSL_CONF` via `_putenv_s` at DLL load time. The path from `GetModuleFileNameA` must be normalized to strip the `\\?\` extended-length prefix (OpenSSL DSO loader rejects it). A `legacy.dll` and `ossl-modules/` directory are deployed alongside `rdp_addon.node`.
 
 ---
 

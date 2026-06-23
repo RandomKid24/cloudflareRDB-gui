@@ -6,91 +6,174 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <openssl/provider.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 
-static void debugLog(const char* msg) {
-  fprintf(stderr, "[RDP-addon] %s\n", msg);
-  fflush(stderr);
+// Strip \\?\ prefix from Windows extended-length paths
+static std::string normalizePath(const std::string& path) {
+  if (path.size() >= 4 && path[0] == '\\' && path[1] == '\\' && path[2] == '?' && path[3] == '\\') {
+    return path.substr(4);
+  }
+  return path;
 }
+
+static void fileLog(const char* msg) {
+  FILE* f = fopen("C:\\Users\\Ady\\Desktop\\cloudflareRDB-gui\\addon-debug.log", "a");
+  if (f) {
+    fprintf(f, "%s\n", msg);
+    fclose(f);
+  }
+}
+
+static void logOpenSSLErrors() {
+  unsigned long err;
+  while ((err = ERR_get_error()) != 0) {
+    char buf[256];
+    ERR_error_string_n(err, buf, sizeof(buf));
+    fileLog((std::string("OpenSSL error: ") + buf).c_str());
+  }
+}
+
+// Global initializer that sets env vars at DLL load time.
+// Uses _putenv_s so the shared CRT cache is updated for FreeRDP.
+struct EnvVarInitializer {
+  EnvVarInitializer() {
+    HMODULE hMod = GetModuleHandleA("rdp_addon.node");
+    if (!hMod) return;
+
+    char dllPath[MAX_PATH];
+    if (!GetModuleFileNameA(hMod, dllPath, MAX_PATH)) return;
+
+    std::string dir(dllPath);
+    auto pos = dir.find_last_of('\\');
+    if (pos == std::string::npos) return;
+    dir = normalizePath(dir.substr(0, pos));
+
+    // _putenv_s updates BOTH the CRT cache AND the OS environment block.
+    // Since we now use /MD (dynamic CRT), this shares the CRT cache with FreeRDP.
+    _putenv_s("OPENSSL_MODULES", dir.c_str());
+
+    // Also ensure openssl.cnf exists to auto-load legacy provider
+    std::string cnfPath = dir + "\\openssl.cnf";
+    WIN32_FIND_DATAA cnfFind;
+    HANDLE hCnf = FindFirstFileA(cnfPath.c_str(), &cnfFind);
+    if (hCnf == INVALID_HANDLE_VALUE) {
+      FILE* f = fopen(cnfPath.c_str(), "w");
+      if (f) {
+        fprintf(f, "openssl_conf = openssl_init\n\n[openssl_init]\nproviders = provider_sect\n\n[provider_sect]\ndefault = default_sect\nlegacy = legacy_sect\n\n[default_sect]\nactivate = 1\n\n[legacy_sect]\nactivate = 1\n\n");
+        fclose(f);
+      }
+    } else {
+      FindClose(hCnf);
+    }
+    _putenv_s("OPENSSL_CONF", cnfPath.c_str());
+  }
+};
+static EnvVarInitializer s_envInit;
 
 static void ensureLegacyProvider() {
   HMODULE hMod = NULL;
   if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                           (LPCSTR)&ensureLegacyProvider, &hMod)) {
-    debugLog("GET_MODULE_HANDLE_EX failed");
     return;
   }
 
   char dllPath[MAX_PATH];
   if (!GetModuleFileNameA(hMod, dllPath, MAX_PATH)) {
-    debugLog("GetModuleFileNameA failed");
     return;
   }
 
   std::string dir(dllPath);
   auto pos = dir.find_last_of('\\');
-  if (pos == std::string::npos) {
-    debugLog("find_last_of failed");
-    return;
-  }
-  dir = dir.substr(0, pos);
-  SetEnvironmentVariableA("OPENSSL_MODULES", dir.c_str());
+  if (pos == std::string::npos) return;
+  dir = normalizePath(dir.substr(0, pos));
 
-  char envBuf[MAX_PATH];
-  GetEnvironmentVariableA("OPENSSL_MODULES", envBuf, MAX_PATH);
-  debugLog((std::string("OPENSSL_MODULES=") + envBuf).c_str());
-  debugLog((std::string("legacy.dll path=") + dir + "\\legacy.dll").c_str());
+  // Check OPENSSL_MODULES env var
+  char* modulesDir = getenv("OPENSSL_MODULES");
+  fileLog((std::string("ensureLegacyProvider: OPENSSL_MODULES=") + (modulesDir ? modulesDir : "NULL")).c_str());
 
-  // Check if legacy.dll exists
-  WIN32_FIND_DATAA findData;
-  HANDLE hFind = FindFirstFileA((dir + "\\legacy.dll").c_str(), &findData);
-  if (hFind != INVALID_HANDLE_VALUE) {
-    debugLog("legacy.dll EXISTS in addon dir");
-    FindClose(hFind);
+  // Check OPENSSL_CONF env var
+  char* confPath = getenv("OPENSSL_CONF");
+  fileLog((std::string("ensureLegacyProvider: OPENSSL_CONF=") + (confPath ? confPath : "NULL")).c_str());
+
+  // Load the legacy provider
+  OSSL_PROVIDER* legacy = OSSL_PROVIDER_load(NULL, "legacy");
+  if (legacy) {
+    fileLog("ensureLegacyProvider: LEGACY loaded OK");
   } else {
-    debugLog("legacy.dll NOT FOUND in addon dir");
+    fileLog("ensureLegacyProvider: LEGACY FAILED");
+    logOpenSSLErrors();
   }
 
-  HMODULE hLib = GetModuleHandleA("libcrypto-3-x64.dll");
-  if (!hLib)
-    hLib = LoadLibraryA("libcrypto-3-x64.dll");
-  if (!hLib) {
-    debugLog("libcrypto-3-x64.dll not loaded");
-    return;
-  }
-  debugLog("libcrypto-3-x64.dll found");
-
-  typedef int (*OSSL_PROVIDER_set_default_search_path_t)(void*, const char*);
-  auto pSetPath = (OSSL_PROVIDER_set_default_search_path_t)GetProcAddress(hLib, "OSSL_PROVIDER_set_default_search_path");
-  if (pSetPath) {
-    pSetPath(NULL, dir.c_str());
-    debugLog((std::string("OSSL_PROVIDER_set_default_search_path called with ") + dir).c_str());
+  // Explicitly load default provider
+  OSSL_PROVIDER* def = OSSL_PROVIDER_load(NULL, "default");
+  if (def) {
+    fileLog("ensureLegacyProvider: DEFAULT loaded OK");
   } else {
-    debugLog("OSSL_PROVIDER_set_default_search_path not found in libcrypto");
+    fileLog("ensureLegacyProvider: DEFAULT FAILED");
+    logOpenSSLErrors();
   }
 
-  typedef void* (*OSSL_PROVIDER_load_t)(void*, const char*);
-  auto pLoad = (OSSL_PROVIDER_load_t)GetProcAddress(hLib, "OSSL_PROVIDER_load");
-  if (!pLoad) {
-    debugLog("OSSL_PROVIDER_load not found in libcrypto");
-    return;
-  }
-  debugLog("OSSL_PROVIDER_load found, attempting load...");
-
-  void* provider = pLoad(NULL, "legacy");
-  if (provider) {
-    debugLog((std::string("OSSL_PROVIDER_load SUCCESS: LEGACY loaded from ") + dir).c_str());
+  // Check which providers are loaded
+  OSSL_PROVIDER* prov = OSSL_PROVIDER_load(NULL, "legacy");
+  if (prov) {
+    fileLog("ensureLegacyProvider: LEGACY (2nd attempt) loaded OK");
   } else {
-    debugLog((std::string("OSSL_PROVIDER_load FAILED from ") + dir).c_str());
+    fileLog("ensureLegacyProvider: LEGACY (2nd attempt) FAILED");
+    logOpenSSLErrors();
+    ERR_clear_error();
   }
 
-  // Explicitly load the default provider because loading any provider manually disables
-  // automatic loading of the default provider (which contains standard AES/SHA/RSA algorithms).
-  void* defProvider = pLoad(NULL, "default");
-  if (defProvider) {
-    debugLog("OSSL_PROVIDER_load SUCCESS: DEFAULT loaded");
+  // Now mimic EXACTLY what WinPR does in winpr_RC4_New_Internal
+  const EVP_CIPHER* evp = EVP_rc4();
+  fileLog((std::string("ensureLegacyProvider: EVP_rc4()=") + (evp ? "AVAILABLE" : "NULL")).c_str());
+
+  if (evp) {
+    // Step 1: EVP_CIPHER_CTX_new
+    EVP_CIPHER_CTX* wctx = EVP_CIPHER_CTX_new();
+    if (!wctx) {
+      fileLog("ensureLegacyProvider: FAIL at EVP_CIPHER_CTX_new");
+    } else {
+      // Step 2: EVP_EncryptInit_ex with NULL key (just set cipher)
+      EVP_CIPHER_CTX_reset(wctx);
+      if (EVP_EncryptInit_ex(wctx, evp, NULL, NULL, NULL) != 1) {
+        fileLog("ensureLegacyProvider: FAIL at EVP_EncryptInit_ex(NULL key)");
+        logOpenSSLErrors();
+      } else {
+        fileLog("ensureLegacyProvider: EVP_EncryptInit_ex(NULL key) OK");
+        // Step 3: Set FIPS flag
+        EVP_CIPHER_CTX_set_flags(wctx, EVP_CIPH_FLAG_NON_FIPS_ALLOW);
+        // Step 4: Set key length
+        if (EVP_CIPHER_CTX_set_key_length(wctx, 16) != 1) {
+          fileLog("ensureLegacyProvider: FAIL at EVP_CIPHER_CTX_set_key_length");
+          logOpenSSLErrors();
+        } else {
+          fileLog("ensureLegacyProvider: EVP_CIPHER_CTX_set_key_length OK");
+          // Step 5: Final EVP_EncryptInit_ex with actual key
+          unsigned char testKey[16] = {0};
+          if (EVP_EncryptInit_ex(wctx, NULL, NULL, testKey, NULL) != 1) {
+            fileLog("ensureLegacyProvider: FAIL at EVP_EncryptInit_ex(key)");
+            logOpenSSLErrors();
+          } else {
+            fileLog("ensureLegacyProvider: FULL WinPR RC4 INIT SEQUENCE OK");
+          }
+        }
+      }
+      EVP_CIPHER_CTX_free(wctx);
+    }
   } else {
-    debugLog("OSSL_PROVIDER_load FAILED: DEFAULT");
+    // Try loading with explicit module path
+    fileLog("ensureLegacyProvider: Trying OSSL_PROVIDER_load with path...");
+    OSSL_PROVIDER* prov_path = OSSL_PROVIDER_load(NULL, (dir + "\\legacy.dll").c_str());
+    if (prov_path) {
+      fileLog("ensureLegacyProvider: LEGACY loaded via path OK");
+    } else {
+      fileLog("ensureLegacyProvider: LEGACY via path FAILED");
+      logOpenSSLErrors();
+    }
   }
 }
 #endif
@@ -246,7 +329,7 @@ bool RdpSession::connect() {
   }
 
   // Security: offer TLS and NLA, let server choose. Server requires HYBRID.
-  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
 

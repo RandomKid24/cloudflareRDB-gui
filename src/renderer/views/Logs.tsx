@@ -11,7 +11,7 @@ interface Props {
 }
 
 export function Logs({ tunnels, initialTunnelId, onClearFilter }: Props) {
-  const { logs, autoScroll, setAutoScroll, exportLogs } = useLogs();
+  const { logs, exportLogs } = useLogs();
   const [filterTunnelId, setFilterTunnelId] = useState<string | undefined>(initialTunnelId);
 
   const handleSelectFilter = (id: string | undefined) => {
@@ -38,11 +38,9 @@ export function Logs({ tunnels, initialTunnelId, onClearFilter }: Props) {
           ))}
         </div>
       </div>
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
         <LogViewer
           logs={logs}
-          autoScroll={autoScroll}
-          setAutoScroll={setAutoScroll}
           onExport={() => exportLogs(filterTunnelId)}
           filterTunnelId={filterTunnelId}
         />

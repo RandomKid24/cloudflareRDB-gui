@@ -19,7 +19,8 @@
 ## ✨ Features
 
 - **🚀 One-click connect** — tunnel + RDP in a single click
-- **🖥️ In-app RDP viewer** — FreeRDP-powered rendering inside an Electron window
+- **🖥️ In-app RDP viewer** — FreeRDP-powered rendering inside an Electron window with dynamic resolution (auto-detects screen size)
+- **🪟 True fullscreen** — native Fullscreen API hides taskbar; auto-hide toolbar reveals on hover
 - **🔐 Zero plaintext secrets** — passwords encrypted with OS-level crypto (DPAPI / Keychain / libsecret)
 - **🪟 Native RDP client** — launch `mstsc.exe` (Windows) or Microsoft Remote Desktop (macOS) with pre-filled credentials
 - **🔄 Auto-reconnect** — survives transient tunnel interruptions
@@ -104,6 +105,12 @@ flowchart LR
 
 Remote Desktop frames are decoded in a native C++ addon using **FreeRDP 3 GDI rendering**, then streamed pixel-by-pixel to a `<canvas>` element via Electron IPC. See [`docs/RDP_NATIVE_ADDON.md`](docs/RDP_NATIVE_ADDON.md) for the full architecture.
 
+The RDP session resolution is dynamically matched to the available viewport space (capped at 2560×1440), and the canvas auto-adjusts when the server reports a different resolution via `DesktopResize`.
+
+### Windows: OpenSSL Legacy Provider
+
+On Windows, FreeRDP 3 requires the OpenSSL **legacy provider** for RC4 during RDP licensing. The addon auto-writes an `openssl.cnf` config, sets `OPENSSL_MODULES`/`OPENSSL_CONF` at DLL load time, and loads the legacy + default providers before connecting. See [`docs/TUNNELGATE_COMPLETE.md`](docs/TUNNELGATE_COMPLETE.md) for details.
+
 ---
 
 ## 🔐 Security
@@ -117,6 +124,10 @@ Remote Desktop frames are decoded in a native C++ addon using **FreeRDP 3 GDI re
 ---
 
 ## 🛠 Development
+
+### RDP Session Resolution
+
+The app auto-detects the viewport size using `ResizeObserver` and passes it as the initial RDP resolution on connect. The C++ addon also forwards `DesktopResize` events from the server, which update the canvas rendering in real-time. This ensures the RDP desktop fills the available space regardless of monitor resolution.
 
 ### macOS Only: Code Signing Workarounds
 

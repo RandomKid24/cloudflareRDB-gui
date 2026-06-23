@@ -28,6 +28,7 @@ export class RdpViewManager {
   private addonLoadError = '';
   private win: BrowserWindow | null = null;
   private onEvent: RdpEventCallback | null = null;
+  private lastDimensions = new Map<string, { width: number; height: number }>();
 
   constructor() {
     try {
@@ -36,10 +37,36 @@ export class RdpViewManager {
 
       if (isWin) {
         process.env.PATH = `${addonDir};${process.env.PATH}`;
+
         // OpenSSL 3.x loads providers from the directory pointed to by OPENSSL_MODULES.
         // We place legacy.dll in <addonDir>/ossl-modules/ so set accordingly.
         const osslModulesDir = path.join(addonDir, 'ossl-modules');
         process.env.OPENSSL_MODULES = osslModulesDir;
+
+        // OpenSSL config to automatically load the legacy provider (needed for RC4, md4, etc.)
+        // Prevents "Failed to allocate RC4" during RDP licensing phase.
+        const opensslCnfPath = path.join(addonDir, 'openssl.cnf');
+        const fs = require('fs');
+        if (!fs.existsSync(opensslCnfPath)) {
+          fs.writeFileSync(opensslCnfPath, [
+            'openssl_conf = openssl_init',
+            '',
+            '[openssl_init]',
+            'providers = provider_sect',
+            '',
+            '[provider_sect]',
+            'default = default_sect',
+            'legacy = legacy_sect',
+            '',
+            '[default_sect]',
+            'activate = 1',
+            '',
+            '[legacy_sect]',
+            'activate = 1',
+            '',
+          ].join('\n'), 'utf-8');
+        }
+        process.env.OPENSSL_CONF = opensslCnfPath;
       }
 
       this.addon = require(addonPath) as RdpAddon;
@@ -70,8 +97,8 @@ export class RdpViewManager {
     port: number,
     username: string,
     password: string,
-    width = DEFAULT_WIDTH,
-    height = DEFAULT_HEIGHT,
+    width?: number,
+    height?: number,
   ): Promise<boolean> {
     if (!this.addonAvailable || !this.addon) {
       const msg = 'Native RDP addon not available: ' + (this.addonLoadError || 'unknown error');
@@ -105,6 +132,13 @@ export class RdpViewManager {
     process.env.WLOG_LEVEL = 'DEBUG';
 
     try {
+      // Use stored dimensions if not provided on reconnect
+      if (width === undefined || height === undefined) {
+        const stored = this.lastDimensions.get(tunnelId);
+        width = stored?.width ?? DEFAULT_WIDTH;
+        height = stored?.height ?? DEFAULT_HEIGHT;
+      }
+
       const sessionId = this.addon.createSession(
         '127.0.0.1', port, width, height, username, password,
         (x, y, w, h, buf) => {
@@ -115,8 +149,9 @@ export class RdpViewManager {
         },
       );
 
+      this.lastDimensions.set(tunnelId, { width, height });
       this.sessions.set(tunnelId, sessionId);
-      writeLog(tunnelId, 'RDP View', 'info', `RDP session created (id=${sessionId})`);
+      writeLog(tunnelId, 'RDP View', 'info', `RDP session created (id=${sessionId}) at ${width}x${height}`);
       return true;
     } catch (err: any) {
       // Dump logs immediately on connection failure
@@ -170,9 +205,10 @@ export class RdpViewManager {
       writeLog(tunnelId, 'RDP View', 'info', `RDP session disconnected: ${firstArg || 'Session closed'}`);
       this.dumpNativeLogs(tunnelId); // Dump logs on disconnect event
     } else if (type === 'resize') {
-      const width = args[0];
-      const height = args[1];
-      writeLog(tunnelId, 'RDP View', 'info', `RDP session resized to ${width}x${height}`);
+      const w = args[0];
+      const h = args[1];
+      this.lastDimensions.set(tunnelId, { width: w, height: h });
+      writeLog(tunnelId, 'RDP View', 'info', `RDP session resized to ${w}x${h}`);
     } else {
       writeLog(tunnelId, 'RDP View', 'debug', `RDP session event [${type}]: ${firstArg}`);
     }
