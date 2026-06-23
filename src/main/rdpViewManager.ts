@@ -8,6 +8,7 @@ interface RdpAddon {
     host: string, port: number,
     width: number, height: number,
     username: string, password: string,
+    serverHostname: string,
     onBitmap: (x: number, y: number, w: number, h: number, buf: Buffer) => void,
     onEvent: (type: string, ...args: any[]) => void,
   ): number;
@@ -97,6 +98,7 @@ export class RdpViewManager {
     port: number,
     username: string,
     password: string,
+    serverHostname?: string,
     width?: number,
     height?: number,
   ): Promise<boolean> {
@@ -140,7 +142,7 @@ export class RdpViewManager {
       }
 
       const sessionId = this.addon.createSession(
-        '127.0.0.1', port, width, height, username, password,
+        '127.0.0.1', port, width, height, username, password, serverHostname ?? '127.0.0.1',
         (x, y, w, h, buf) => {
           this.forwardFrame(tunnelId, x, y, w, h, buf);
         },

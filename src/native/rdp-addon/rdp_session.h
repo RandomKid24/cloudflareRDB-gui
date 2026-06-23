@@ -27,7 +27,8 @@ public:
              int width, int height,
              const std::string& username,
              const std::string& password,
-             RdpFrameListener* listener);
+             RdpFrameListener* listener,
+             const std::string& serverHostname = "");
   ~RdpSession();
 
   bool connect();
@@ -55,6 +56,7 @@ private:
 
   std::string lastError_;
   std::string host_;
+  std::string serverHostname_;
   int port_;
   int width_;
   int height_;

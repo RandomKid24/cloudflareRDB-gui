@@ -184,7 +184,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
       await credentialStore.injectCredential(tunnelId, config.name, config.username, password, port);
     }
 
-    await rdpViewManager.connectView(tunnelId, port, config.username, password, width, height);
+    await rdpViewManager.connectView(tunnelId, port, config.username, password, config.hostname, width, height);
     return true;
   });
 
@@ -207,7 +207,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
     }
 
     rdpViewManager.disconnectView(tunnelId);
-    await rdpViewManager.connectView(tunnelId, port, config.username, newPassword);
+    await rdpViewManager.connectView(tunnelId, port, config.username, newPassword, config.hostname);
     return true;
   });
 

@@ -216,9 +216,11 @@ RdpSession::RdpSession(const std::string& host, int port,
                        int width, int height,
                        const std::string& username,
                        const std::string& password,
-                       RdpFrameListener* listener)
+                       RdpFrameListener* listener,
+                       const std::string& serverHostname)
   : host_(host), port_(port), width_(width), height_(height),
-    username_(username), password_(password), listener_(listener) {}
+    username_(username), password_(password), listener_(listener),
+    serverHostname_(serverHostname.empty() ? host : serverHostname) {}
 
 RdpSession::~RdpSession() {
   disconnect();
@@ -276,6 +278,7 @@ bool RdpSession::connect() {
 
   rdpSettings* settings = context_->settings;
   freerdp_settings_set_string(settings, FreeRDP_ServerHostname, host_.c_str());
+  freerdp_settings_set_string(settings, FreeRDP_UserSpecifiedServerName, serverHostname_.c_str());
   freerdp_settings_set_uint32(settings, FreeRDP_ServerPort, port_);
   freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, width_);
   freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, height_);
@@ -329,7 +332,7 @@ bool RdpSession::connect() {
   }
 
   // Security: offer TLS and NLA, let server choose. Server requires HYBRID.
-  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
 

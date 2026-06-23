@@ -79,8 +79,8 @@ private:
 static Napi::Value CreateSession(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
-  if (info.Length() < 8) {
-    Napi::TypeError::New(env, "Expected 8 arguments").ThrowAsJavaScriptException();
+  if (info.Length() < 9) {
+    Napi::TypeError::New(env, "Expected 9 arguments").ThrowAsJavaScriptException();
     return env.Null();
   }
 
@@ -90,8 +90,9 @@ static Napi::Value CreateSession(const Napi::CallbackInfo& info) {
   int height = info[3].As<Napi::Number>().Int32Value();
   std::string username = info[4].As<Napi::String>().Utf8Value();
   std::string password = info[5].As<Napi::String>().Utf8Value();
-  Napi::Function onBitmap = info[6].As<Napi::Function>();
-  Napi::Function onEvent = info[7].As<Napi::Function>();
+  std::string serverHostname = info[6].As<Napi::String>().Utf8Value();
+  Napi::Function onBitmap = info[7].As<Napi::Function>();
+  Napi::Function onEvent = info[8].As<Napi::Function>();
 
   auto bitmapTsFn = Napi::ThreadSafeFunction::New(
     env, onBitmap, "rdp-bitmap", 0, 1);
@@ -107,7 +108,7 @@ static Napi::Value CreateSession(const Napi::CallbackInfo& info) {
     std::move(disconnectTsFn), std::move(errorTsFn));
 
   auto session = new RdpSession(
-    host, port, width, height, username, password, listener);
+    host, port, width, height, username, password, listener, serverHostname);
 
   bool ok = session->connect();
   if (!ok) {
