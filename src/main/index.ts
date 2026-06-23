@@ -15,30 +15,28 @@ let isQuitting = false;
 const PREVENT_WINDOW_CLOSE = true;
 
 function createTrayIcons(): { idle: Electron.NativeImage; connecting: Electron.NativeImage; connected: Electron.NativeImage; error: Electron.NativeImage } {
-  const size = 16;
-  function makeIcon(color: [number, number, number, number]): Electron.NativeImage {
-    const buf = Buffer.alloc(size * size * 4);
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const cx = x - size / 2;
-        const cy = y - size / 2;
-        const dist = Math.sqrt(cx * cx + cy * cy);
-        const alpha = dist < size / 2 - 1 ? 255 : dist < size / 2 ? 128 : 0;
-        const offset = (y * size + x) * 4;
-        buf[offset] = color[0];
-        buf[offset + 1] = color[1];
-        buf[offset + 2] = color[2];
-        buf[offset + 3] = alpha;
-      }
+  const logo = nativeImage.createFromPath(
+    path.join(__dirname, '../../resources/icons/16x16.png')
+  ).resize({ width: 16, height: 16 });
+  const size = logo.getSize();
+
+  function tinted(tint: [number, number, number]): Electron.NativeImage {
+    const raw = logo.toBitmap();
+    const pixels = Buffer.alloc(raw.length);
+    for (let i = 0; i < raw.length; i += 4) {
+      pixels[i]     = Math.round(raw[i]     * tint[2] / 255);  // B
+      pixels[i + 1] = Math.round(raw[i + 1] * tint[1] / 255);  // G
+      pixels[i + 2] = Math.round(raw[i + 2] * tint[0] / 255);  // R
+      pixels[i + 3] = raw[i + 3];                                // A
     }
-    return nativeImage.createFromBuffer(buf, { width: size, height: size });
+    return nativeImage.createFromBuffer(pixels, size);
   }
 
   return {
-    idle: makeIcon([100, 100, 100, 255]),
-    connecting: makeIcon([255, 191, 0, 255]),
-    connected: makeIcon([0, 200, 83, 255]),
-    error: makeIcon([244, 67, 54, 255]),
+    idle: tinted([200, 200, 200]),
+    connecting: tinted([255, 191, 0]),
+    connected: tinted([0, 200, 83]),
+    error: tinted([244, 67, 54]),
   };
 }
 
