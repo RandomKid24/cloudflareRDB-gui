@@ -115,6 +115,8 @@ export function RdpView({ tunnel, onBack }: Props) {
       setError('');
       setPasswordUpdateRequired(false);
       try {
+        // Wait for ResizeObserver to measure the actual container
+        await new Promise(r => setTimeout(r, 100));
         const { width, height } = connectSizeRef.current;
         await window.cloudflareRdp.rdp.connect(tunnel.id, width, height);
         setStatus('connected');
