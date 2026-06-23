@@ -1,4 +1,5 @@
 #include "rdp_session.h"
+#include <freerdp/settings.h>
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/input.h>
 #include <winpr/wlog.h>
@@ -97,7 +98,7 @@ static void ensureLegacyProvider() {
 static DWORD verifyCertificateCallback(freerdp* instance, const char* common_name,
                                        const char* subject, const char* issuer,
                                        const char* fingerprint, BOOL host_mismatch) {
-  const char* host = freerdp_settings_get_string(instance->settings, FreeRDP_ServerHostname);
+  const char* host = freerdp_settings_get_string(instance->context->settings, FreeRDP_ServerHostname);
   if (host && (strcmp(host, "127.0.0.1") == 0 || strcmp(host, "localhost") == 0)) {
     fprintf(stderr, "[RDP] verifyCertificateCallback: Accepting loopback cert for %s\n", host);
     fflush(stderr);
@@ -112,7 +113,7 @@ static DWORD verifyChangedCertificateCallback(freerdp* instance, const char* com
                                               const char* subject, const char* issuer,
                                               const char* fingerprint, const char* old_subject,
                                               const char* old_issuer, const char* old_fingerprint) {
-  const char* host = freerdp_settings_get_string(instance->settings, FreeRDP_ServerHostname);
+  const char* host = freerdp_settings_get_string(instance->context->settings, FreeRDP_ServerHostname);
   if (host && (strcmp(host, "127.0.0.1") == 0 || strcmp(host, "localhost") == 0)) {
     fprintf(stderr, "[RDP] verifyChangedCertificateCallback: Accepting changed loopback cert for %s\n", host);
     fflush(stderr);
@@ -488,3 +489,4 @@ BOOL RdpSession::desktopResize(rdpContext* ctx) {
   self->listener_->onResize(newW, newH);
   return TRUE;
 }
+
