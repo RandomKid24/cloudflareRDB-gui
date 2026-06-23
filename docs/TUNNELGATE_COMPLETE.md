@@ -543,7 +543,7 @@ User clicks "Disconnect" or "← Back"
 | **Credential injection** | `cmdkey` (Windows Credential Manager) | Skipped | Skipped |
 | **NLA setting** | `NlaSecurity=TRUE`, `TlsSecurity=TRUE` | `NlaSecurity=TRUE` | `NlaSecurity=TRUE` |
 | **FreeRDP source** | vcpkg `freerdp:x64-windows` | Homebrew `freerdp` | `apt install freerdp2-dev` |
-| **Build generator** | Visual Studio 2022 | Unix Makefiles | Unix Makefiles |
+| **Build generator** | VS auto-detected (2022/2026) via vcvarsall | Unix Makefiles | Unix Makefiles |
 | **Dylib handling** | Copy DLLs + deps from vcpkg | Copy .dylib, `install_name_tool`, ad-hoc sign | No extra step |
 | **cloudflared name** | `cloudflared.exe` | `cloudflared` | `cloudflared` |
 | **Binary search** | `%LOCALAPPDATA%`, `%PROGRAMFILES%` | `/usr/local/bin`, `/opt/homebrew/bin` | `/usr/local/bin`, `/usr/bin` |

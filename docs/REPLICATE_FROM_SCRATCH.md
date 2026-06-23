@@ -1277,10 +1277,11 @@ legacy.dll → <addonOutDir>/ossl-modules/legacy.dll
 
 ### CMake Build Flags Per Platform
 
-**Windows:**
+**Windows (auto-detected via `detectVs()`):**
 
 ```
--G "Visual Studio 17 2022" -A x64
+-G "Visual Studio 17 2022" / "Visual Studio 18 2026"  # auto-detected from vcvarsall path
+-A x64
 -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake
 -DVCPKG_TARGET_TRIPLET=x64-windows
 -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL         # /MD — Bug 7 fix
@@ -1710,7 +1711,7 @@ Both error and password-updated banners use `position: absolute` (not in flow) s
 | **Credential injection**           | `cmdkey` (Win Credential Manager)        | Skipped                                        | Skipped                          |
 | **NLA setting**                    | `NlaSecurity=TRUE`, `TlsSecurity=TRUE` | `NlaSecurity=TRUE`                           | `NlaSecurity=TRUE`             |
 | **FreeRDP source**                 | vcpkg `freerdp:x64-windows`              | Homebrew `freerdp`                           | `apt install freerdp2-dev`     |
-| **Build generator**                | Visual Studio 2022                         | Unix Makefiles                                 | Unix Makefiles                   |
+| **Build generator**                | VS auto-detected (2022/2026) via vcvarsall  | Unix Makefiles                                 | Unix Makefiles                   |
 | **Dylib handling**                 | Copy DLLs + deps from vcpkg                | Copy .dylib,`install_name_tool`, ad-hoc sign | No extra step                    |
 | **cloudflared name**               | `cloudflared.exe`                        | `cloudflared`                                | `cloudflared`                  |
 | **Binary search**                  | `%LOCALAPPDATA%`, `%PROGRAMFILES%`     | `/usr/local/bin`, `/opt/homebrew/bin`      | `/usr/local/bin`, `/usr/bin` |
@@ -2732,6 +2733,29 @@ static void fileLog(const char* msg) {
 **Related Files:**
 
 - `src/native/rdp-addon/rdp_session.cpp`:22-28 — fileLog function with hardcoded path
+
+---
+
+### Bug 15: VS Generator Auto-Detection — `vswhere` Broken, Hardcoded Generator Failed for VS 2026
+
+**Severity:** Build-blocker on CI with VS 2026
+
+**Symptom:**
+```
+CMake Error at CMakeLists.txt:2 (project):
+  Generator Visual Studio 17 2022 could not find any instance of Visual Studio.
+```
+
+**Root Cause:**
+The original `detectVsGenerator()` built the vswhere path using `process.env['ProgramFiles(x86)']` which resolved to `C:\Program Files(x86)` (missing space before the parenthesis), so `vswhere.exe` was never found. The function fell back to a hardcoded `Visual Studio 17 2022`, but the CI runner had VS 2026 (version 18), not VS 2022. Additionally, `vswhere` returned no instances even when pointed at the correct path.
+
+**Fix in `scripts/build-native.js`:**
+- Replaced `detectVsGenerator()` with `detectVs()` — scans a list of known VS installation paths for `vcvarsall.bat`, each paired with the correct CMake generator string (e.g., `18\Enterprise\...` → `Visual Studio 18 2026`, `2022\BuildTools\...` → `Visual Studio 17 2022`)
+- `vsSpawn()` captures the VS developer environment by running `vcvarsall.bat x64 >nul && set`, parses the output, and spawns cmake with the merged environment
+- Both `-G` generator and environment are now determined dynamically from whichever VS installation is found
+
+**Related Files:**
+- `scripts/build-native.js`:62-113 — `detectVs()`, `vsSpawn()`, and `vsDetected` usage
 
 ---
 

@@ -303,6 +303,14 @@ replace Framework from `node_modules` and `codesign --deep` manually.
 **Cause**: Fullscreen was implemented as `position: fixed; inset: 0` (CSS-only) instead of the native Fullscreen API. The toolbar consumed 48px at the top, clipping the remote desktop.
 **Fix**: Use `document.documentElement.requestFullscreen()` / `document.exitFullscreen()` to enter true OS fullscreen. In fullscreen, the toolbar is absolutely positioned with `opacity: 0.15` and reveals to full opacity on hover.
 
+### Bug 9: VS Generator Detection — `vswhere` Path Broken
+
+**Symptom:** CMake configure fails with `could not find any instance of Visual Studio` on machines where `ProgramFiles(x86)` env var has a non-standard value (e.g., `C:\Program Files(x86)` missing space) or when VS version doesn't match hardcoded generator.
+
+**Cause:** The original `detectVsGenerator()` function built the vswhere path using `process.env['ProgramFiles(x86)']` which could return a malformed path, causing fallback to a hardcoded `Visual Studio 17 2022` regardless of what VS was actually installed.
+
+**Fix:** Replaced vswhere-based detection with `detectVs()` which scans known VS installation paths for `vcvarsall.bat`, pairs each path with its correct CMake generator string (e.g., `18` → `Visual Studio 18 2026`, `2022` → `Visual Studio 17 2022`). The `vsSpawn()` function captures the VS environment by running `vcvarsall.bat x64 && set` and passes the merged environment to cmake.
+
 ### Bug 4 (original): Stale Paint Closure
 **Symptom**: (Potential) paint uses old width/height after resize.
 **Cause**: `useCallback(paint, [width, height])` + rAF captures stale values.

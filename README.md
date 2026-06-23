@@ -272,7 +272,7 @@ src/
 │       └── rdp_module.cpp         # N-API module entry point
 ├── shared/                # Shared TypeScript types & interfaces
 └── scripts/
-    ├── build-native.js    # cmake-js builder, VS 2022 generator, DLL deploy
+    ├── build-native.js    # cmake-js builder, auto-detects VS via vcvarsall, DLL deploy
     └── generate-icons.ps1 # Icon generation from source PNG
 ```
 
