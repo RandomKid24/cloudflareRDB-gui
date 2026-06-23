@@ -194,6 +194,8 @@ export function RdpCanvas({ tunnelId, width, height, connected }: Props) {
         cursor: connected ? 'default' : 'not-allowed',
         outline: 'none',
         background: '#000',
+        objectFit: 'contain',
+        imageRendering: 'pixelated',
       }}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}

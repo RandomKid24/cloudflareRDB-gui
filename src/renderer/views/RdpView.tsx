@@ -59,10 +59,11 @@ export function RdpView({ tunnel, onBack }: Props) {
   const active = tunnel?.runtime.status === 'connected';
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const connectSizeRef = useRef({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
+  const connectedRef = useRef(false);
 
   // Track canvas wrapper size for dynamic RDP resolution
   // connectSizeRef is used for the initial RDP connect (no reconnect on resize)
-  // canvasWidth/canvasHeight state updates the canvas rendering
+  // canvasWidth/canvasHeight state is frozen after connect to prevent canvas clearing
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -76,8 +77,11 @@ export function RdpView({ tunnel, onBack }: Props) {
           h = Math.max(480, Math.min(1440, h - toolbarEl.offsetHeight));
         }
         connectSizeRef.current = { width: w, height: h };
-        setCanvasWidth((prev) => prev === w ? prev : w);
-        setCanvasHeight((prev) => prev === h ? prev : h);
+        // Only update canvas dimensions before connect (after connect, keep RDP resolution)
+        if (!connectedRef.current) {
+          setCanvasWidth((prev) => prev === w ? prev : w);
+          setCanvasHeight((prev) => prev === h ? prev : h);
+        }
       }
     });
     ro.observe(container);
@@ -119,6 +123,9 @@ export function RdpView({ tunnel, onBack }: Props) {
         await new Promise(r => setTimeout(r, 100));
         const { width, height } = connectSizeRef.current;
         await window.cloudflareRdp.rdp.connect(tunnel.id, width, height);
+        setCanvasWidth(width);
+        setCanvasHeight(height);
+        connectedRef.current = true;
         setStatus('connected');
       } catch (err: any) {
         const msg = err.message || 'Failed to connect RDP view';
@@ -136,7 +143,7 @@ export function RdpView({ tunnel, onBack }: Props) {
 
     const unsub = window.cloudflareRdp.rdp.onEvent((tunnelId: string, type: string, ...args: any[]) => {
       if (tunnelId !== tunnel.id) return;
-      if (type === 'disconnected') setStatus('disconnected');
+      if (type === 'disconnected') { setStatus('disconnected'); connectedRef.current = false; }
       if (type === 'error') {
         const msg = args[0] || 'RDP connection error';
         if (isPasswordExpired(msg)) {
@@ -158,6 +165,7 @@ export function RdpView({ tunnel, onBack }: Props) {
     });
 
     return () => {
+      connectedRef.current = false;
       unsub();
       window.cloudflareRdp.rdp.disconnect(tunnel.id).catch(() => {});
     };

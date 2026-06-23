@@ -354,6 +354,8 @@ password expired detected  → Amber dialog with password input + "Update & Reco
 
 Fullscreen is delegated entirely to the OS (F11 / window manager). The in-app fullscreen button was removed because it conflicts with the OS-native fullscreen behavior and provides no additional value. The canvas parent uses `display: flex; overflow: hidden` to fill the available space correctly.
 
+Canvas dimensions are frozen after the initial RDP connect to prevent buffer clearing on window resize. The canvas uses `object-fit: contain` with `image-rendering: pixelated` CSS for crisp scaling. ResizeObserver continues to track container size in `connectSizeRef` for potential reconnects but no longer updates canvas state after connection is established.
+
 ---
 
 ## 8. Native C++ Addon
