@@ -32,26 +32,42 @@ export class RdpViewManager {
   private lastDimensions = new Map<string, { width: number; height: number }>();
 
   constructor() {
+    const fs = require('fs');
+    let addonDir = path.join(__dirname, '..', '..', 'native', 'rdp-addon', 'build', 'Release');
+    if (!fs.existsSync(path.join(addonDir, 'rdp_addon.node'))) {
+      addonDir = path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release');
+    }
+    const addonPath = path.join(addonDir, 'rdp_addon.node');
+
     try {
-      const fs = require('fs');
-      let addonDir = path.join(__dirname, '..', '..', 'native', 'rdp-addon', 'build', 'Release');
-      if (!fs.existsSync(path.join(addonDir, 'rdp_addon.node'))) {
-        addonDir = path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release');
+      if (!fs.existsSync(addonPath)) {
+        throw new Error(`Addon file not found at ${addonPath}`);
       }
-      const addonPath = path.join(addonDir, 'rdp_addon.node');
 
       if (isWin) {
         process.env.PATH = `${addonDir};${process.env.PATH}`;
 
-        // OpenSSL 3.x loads providers from the directory pointed to by OPENSSL_MODULES.
-        // We place legacy.dll in <addonDir>/ossl-modules/ so set accordingly.
+        // Check for required VC++ runtime DLLs (the common cause of the misleading
+        // "The specified module could not be found" error — Node.js reports the .node
+        // path but the actual missing file is a dependency DLL).
+        const requiredDlls = ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];
+        const missing = requiredDlls.filter(dll => {
+          const p = path.join(addonDir, dll);
+          if (fs.existsSync(p)) return false;
+          try { require(dll); return false; } catch { return true; }
+        });
+        if (missing.length > 0) {
+          throw new Error(
+            `Missing Visual C++ runtime DLLs in ${addonDir}:\n  ${missing.join('\n  ')}\n\n` +
+            `These are required by the native RDP addon. Reinstall the application or ` +
+            `install the Microsoft Visual C++ 2022 Redistributable.`
+          );
+        }
+
         const osslModulesDir = path.join(addonDir, 'ossl-modules');
         process.env.OPENSSL_MODULES = osslModulesDir;
 
-        // OpenSSL config to automatically load the legacy provider (needed for RC4, md4, etc.)
-        // Prevents "Failed to allocate RC4" during RDP licensing phase.
         const opensslCnfPath = path.join(addonDir, 'openssl.cnf');
-        const fs = require('fs');
         if (!fs.existsSync(opensslCnfPath)) {
           fs.writeFileSync(opensslCnfPath, [
             'openssl_conf = openssl_init',
@@ -80,7 +96,7 @@ export class RdpViewManager {
     } catch (err: any) {
       this.addonLoadError = `${err.message}\n${err.stack || ''}`;
       writeLog('rdp', 'RDP View', 'error',
-        `Native RDP addon failed to load from ${path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release', 'rdp_addon.node')}:\n${this.addonLoadError}`);
+        `Native RDP addon failed to load from ${addonPath}:\n${this.addonLoadError}`);
       this.addonAvailable = false;
     }
   }
