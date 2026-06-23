@@ -17,11 +17,24 @@ concurrency:
 
 jobs:
   build:
-    name: Build Windows
-    runs-on: windows-latest
+    name: Build ${{ matrix.os-name }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            os-name: Windows
+            target: --win nsis
+          - os: ubuntu-latest
+            os-name: Linux
+            target: --linux AppImage --linux deb
+          - os: macos-latest
+            os-name: macOS
+            target: --mac dmg
+    runs-on: ${{ matrix.os }}
 
     env:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,13 +54,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Cache vcpkg
-        uses: actions/cache@v4
-        with:
-          path: C:\vcpkg\installed
-          key: vcpkg-freerdp-2.11.2-v6-${{ hashFiles('vcpkg-overlay/ports/freerdp/**') }}
-
-      - name: Install FreeRDP
+      - name: Install FreeRDP (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $vcpkgRoot = "C:\vcpkg"
@@ -60,17 +68,28 @@ jobs:
               Write-Host "Normalized: $($_.Name)"
           }
 
-          Write-Host "=== Installing FreeRDP via vcpkg overlay (WITH_NATIVE_SSPI=OFF) ==="
+          Write-Host "=== Installing FreeRDP via vcpkg overlay ==="
           & "$vcpkgRoot\vcpkg" install freerdp:x64-windows --no-binarycaching --classic --overlay-ports="${{ github.workspace }}\vcpkg-overlay\ports"
           if ($LASTEXITCODE -ne 0) {
             Write-Host "vcpkg install failed!"
             exit 1
           }
-
           & "$vcpkgRoot\vcpkg" integrate install
           Write-Host "=== FreeRDP install complete ==="
 
-      - name: Verify freerdp installed
+      - name: Install FreeRDP (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libfreerdp-dev libwinpr-dev patchelf
+
+      - name: Install FreeRDP (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install freerdp
+
+      - name: Verify FreeRDP installed (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           Write-Host "=== freerdp share dir ==="
@@ -81,7 +100,7 @@ jobs:
       - name: Build desktop artifacts
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npm run electron:build -- --win nsis --publish never
+        run: npm run build:all && npx electron-builder ${{ matrix.target }} --publish never
 
       - name: Verify addon compiled
         shell: pwsh
@@ -92,34 +111,41 @@ jobs:
             Write-Host "rdp_addon.node not found in build output"
             exit 1
           }
-          if (Test-Path -Path "native/rdp-addon/build/Release/ossl-modules/legacy.dll") {
-            Write-Host "ossl-modules/legacy.dll present"
-          } else {
-            Write-Host "WARNING: ossl-modules/legacy.dll NOT found"
-          }
-          $missing = @()
-          foreach ($dll in @("msvcp140.dll","vcruntime140.dll","vcruntime140_1.dll")) {
-            if (Test-Path -Path "native/rdp-addon/build/Release/$dll") {
-              Write-Host "$dll present"
-            } else {
-              Write-Host "WARNING: $dll NOT found"
-              $missing += $dll
+          if ('${{ runner.os }}' -eq 'Windows') {
+            $missing = @()
+            foreach ($dll in @("msvcp140.dll","vcruntime140.dll","vcruntime140_1.dll")) {
+              if (Test-Path -Path "native/rdp-addon/build/Release/$dll") {
+                Write-Host "$dll present"
+              } else {
+                Write-Host "WARNING: $dll NOT found"
+                $missing += $dll
+              }
             }
-          }
-          if ($missing.Count -gt 0) {
-            Write-Host "CRITICAL: VC runtime DLLs missing: $($missing -join ', ')"
-            exit 1
+            if ($missing.Count -gt 0) {
+              Write-Host "CRITICAL: VC runtime DLLs missing: $($missing -join ', ')"
+              exit 1
+            }
+            if (Test-Path -Path "native/rdp-addon/build/Release/ossl-modules/legacy.dll") {
+              Write-Host "ossl-modules/legacy.dll present"
+            } else {
+              Write-Host "WARNING: ossl-modules/legacy.dll NOT found"
+            }
           }
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-windows
+          name: release-${{ matrix.os-name }}
           path: |
             release/*.exe
             release/*.7z
             release/*.blockmap
-          if-no-files-found: error
+            release/*.AppImage
+            release/*.deb
+            release/*.dmg
+            release/*.zip
+            release/*.dmg.blockmap
+          if-no-files-found: warn
           retention-days: 14
 
   publish:
@@ -134,7 +160,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download built artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist-artifacts

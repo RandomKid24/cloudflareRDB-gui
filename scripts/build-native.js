@@ -239,14 +239,20 @@ if (isWin) {
     'installed', 'x64-windows'
   );
   const binDir = path.join(freerdpRoot, 'bin');
-  const dlls = ['freerdp3.dll', 'freerdp-client3.dll', 'winpr3.dll', 'z.dll', 'cjson.dll'];
-  for (const dll of dlls) {
-    const p = path.join(binDir, dll);
-    if (fs.existsSync(p)) {
-      fs.copyFileSync(p, path.join(addonOutDir, dll));
-      console.log(`  Copied ${dll}`);
+  const dllVariants = [
+    ['freerdp3.dll', 'freerdp2.dll', 'freerdp.dll'],
+    ['freerdp-client3.dll', 'freerdp-client2.dll', 'freerdp-client.dll'],
+    ['winpr3.dll', 'winpr2.dll', 'winpr.dll'],
+    ['z.dll'],
+    ['cjson.dll'],
+  ];
+  for (const variants of dllVariants) {
+    const found = variants.find(dll => fs.existsSync(path.join(binDir, dll)));
+    if (found) {
+      fs.copyFileSync(path.join(binDir, found), path.join(addonOutDir, found));
+      console.log(`  Copied ${found}`);
     } else {
-      console.warn(`  Warning: ${dll} not found in ${binDir}`);
+      console.warn(`  Warning: none of [${variants.join(', ')}] found in ${binDir}`);
     }
   }
   const deps = ['libcrypto-3-x64.dll', 'libssl-3-x64.dll', 'zlib1.dll'];
@@ -264,19 +270,21 @@ if (isWin) {
   const vswhere = spawnSync('vswhere', ['-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-property', 'installationPath'], { encoding: 'utf8' });
   if (vswhere.status === 0 && vswhere.stdout) {
     const vsPath = vswhere.stdout.trim().split('\n')[0];
-    const msvcGlob = path.join(vsPath, 'VC', 'Tools', 'MSVC', '*', 'bin', 'Hostx64', 'x64');
-    const msvcDirs = fs.readdirSync(path.dirname(msvcGlob)).filter(d => d.startsWith('14.'));
-    for (const ver of msvcDirs) {
-      const binDir2 = path.join(vsPath, 'VC', 'Tools', 'MSVC', ver, 'bin', 'Hostx64', 'x64');
-      if (fs.existsSync(binDir2)) {
-        for (const dll of vcDlls) {
-          const p = path.join(binDir2, dll);
-          if (fs.existsSync(p)) {
-            fs.copyFileSync(p, path.join(addonOutDir, dll));
-            console.log(`  Copied VC runtime ${dll}`);
+    const msvcRoot = path.join(vsPath, 'VC', 'Tools', 'MSVC');
+    if (fs.existsSync(msvcRoot)) {
+      const msvcVersions = fs.readdirSync(msvcRoot).filter(d => /^14\./.test(d));
+      for (const ver of msvcVersions) {
+        const binDir2 = path.join(msvcRoot, ver, 'bin', 'Hostx64', 'x64');
+        if (fs.existsSync(binDir2)) {
+          for (const dll of vcDlls) {
+            const p = path.join(binDir2, dll);
+            if (fs.existsSync(p)) {
+              fs.copyFileSync(p, path.join(addonOutDir, dll));
+              console.log(`  Copied VC runtime ${dll}`);
+            }
           }
+          break;
         }
-        break;
       }
     }
   }
@@ -448,6 +456,59 @@ if (isMac) {
       spawnSync('codesign', ['--force', '--sign', '-', lib], { stdio: 'ignore' });
     }
     console.log('  Ad-hoc signed all dylibs');
+  }
+}
+
+// Linux: copy FreeRDP shared libraries alongside the addon, set RPATH to $ORIGIN
+if (!isWin && !isMac) {
+  const addonNodePath = path.join(addonOutDir, addonName);
+  const ldd = spawnSync('ldd', [addonNodePath], { encoding: 'utf8' });
+  if (ldd.status === 0 && ldd.stdout) {
+    const needed = ['freerdp', 'winpr', 'crypto', 'ssl'];
+    const copied = [];
+    for (const line of ldd.stdout.split('\n')) {
+      const m = line.match(/^\s*(\S+)\s+=>\s+(\S+)\s/);
+      if (!m) continue;
+      const libName = m[1];
+      const libPath = m[2];
+      if (libPath === 'not found') {
+        console.warn(`  Warning: ${libName} not found on system`);
+        continue;
+      }
+      if (!needed.some(n => libName.includes(n))) continue;
+      if (libPath.startsWith('/usr/') || libPath.startsWith('/lib/')) {
+        const dest = path.join(addonOutDir, path.basename(libPath));
+        if (!fs.existsSync(dest)) {
+          try {
+            fs.copyFileSync(libPath, dest);
+            fs.chmodSync(dest, 0o755);
+            console.log(`  Copied ${path.basename(libPath)}`);
+            copied.push(dest);
+          } catch (e) {
+            console.warn(`  Warning: failed to copy ${libPath}: ${e.message}`);
+          }
+        }
+      }
+    }
+    // Set RPATH on the .node file so it finds libraries in its own directory
+    const patchelf = spawnSync('which', ['patchelf'], { encoding: 'utf8' });
+    if (patchelf.status === 0) {
+      spawnSync('patchelf', ['--set-rpath', '$ORIGIN', addonNodePath], { stdio: 'ignore' });
+      for (const lib of copied) {
+        spawnSync('patchelf', ['--set-rpath', '$ORIGIN', lib], { stdio: 'ignore' });
+      }
+      console.log('  Set RPATH=$ORIGIN on addon and bundled libs');
+    }
+  }
+  // Also copy OpenSSL legacy provider if available
+  for (const candidate of ['/usr/lib/x86_64-linux-gnu/ossl-modules/legacy.so', '/usr/lib/ossl-modules/legacy.so']) {
+    if (fs.existsSync(candidate)) {
+      const osslDir = path.join(addonOutDir, 'ossl-modules');
+      fs.mkdirSync(osslDir, { recursive: true });
+      fs.copyFileSync(candidate, path.join(osslDir, 'legacy.so'));
+      console.log('  Copied OpenSSL legacy provider');
+      break;
+    }
   }
 }
 

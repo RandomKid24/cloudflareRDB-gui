@@ -1,6 +1,7 @@
 import { BrowserWindow, app } from 'electron';
 import path from 'path';
 const isWin = process.platform === 'win32';
+const isLinux = process.platform === 'linux';
 import { writeLog } from './logger';
 
 interface RdpAddon {
@@ -47,9 +48,6 @@ export class RdpViewManager {
       if (isWin) {
         process.env.PATH = `${addonDir};${process.env.PATH}`;
 
-        // Check for required VC++ runtime DLLs (the common cause of the misleading
-        // "The specified module could not be found" error — Node.js reports the .node
-        // path but the actual missing file is a dependency DLL).
         const requiredDlls = ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];
         const missing = requiredDlls.filter(dll => {
           const p = path.join(addonDir, dll);
@@ -88,6 +86,10 @@ export class RdpViewManager {
           ].join('\n'), 'utf-8');
         }
         process.env.OPENSSL_CONF = opensslCnfPath;
+      }
+
+      if (isLinux) {
+        process.env.LD_LIBRARY_PATH = `${addonDir}:${process.env.LD_LIBRARY_PATH || ''}`;
       }
 
       this.addon = require(addonPath) as RdpAddon;
