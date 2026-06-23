@@ -59,32 +59,49 @@ fs.mkdirSync(addonOutDir, { recursive: true });
   console.log(`  cmake: ${r.stdout.split('\n')[0]}`);
 }
 
-// Detect the actual installed Visual Studio generator for CMake using vswhere
-function detectVsGenerator() {
-  const vswhere = path.join(
-    process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
-    'Microsoft Visual Studio', 'Installer', 'vswhere.exe'
-  );
-  if (fs.existsSync(vswhere)) {
-    const r = spawnSync(vswhere, [
-      '-latest',
-      '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
-      '-property', 'catalog_productLineVersion'
-    ], { encoding: 'utf8' });
-    if (r.status === 0 && r.stdout.trim()) {
-      const year = r.stdout.trim();
-      const versionMap = { '2026': '18', '2025': '18', '2022': '17', '2019': '16', '2017': '15' };
-      const version = versionMap[year];
-      if (version) {
-        const generator = `Visual Studio ${version} ${year}`;
-        console.log(`  Detected VS generator: ${generator}`);
-        return generator;
-      }
+// Find vcvarsall.bat from available Visual Studio installations
+function findVcvarsAll() {
+  const candidates = [
+    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat',
+    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat',
+    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Professional\\VC\\Auxiliary\\Build\\vcvarsall.bat',
+    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat',
+    'C:\\Program Files\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat',
+    'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat',
+    'C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Auxiliary\\Build\\vcvarsall.bat',
+    'C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat',
+    'C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat',
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      console.log(`  Found vcvarsall: ${c}`);
+      return c;
     }
   }
-  // Fallback to cmake-js style detection — try cmake --help but filter by actual registry
-  console.warn('  vswhere not available — falling back to Visual Studio 17 2022');
-  return 'Visual Studio 17 2022';
+  return null;
+}
+
+// Spawn a command within a VS developer command prompt
+function vsSpawn(cmd, args, opts) {
+  const vcvarsall = findVcvarsAll();
+  if (vcvarsall) {
+    // Capture VS environment by running vcvarsall then "set"
+    const envOut = spawnSync('cmd.exe', ['/d', '/s', '/c', `call "${vcvarsall}" x64 >nul && set`], { encoding: 'utf8', env: { ...process.env } });
+    if (envOut.status === 0 && envOut.stdout) {
+      const vsEnv = { ...process.env };
+      for (const line of envOut.stdout.split('\n')) {
+        const eqIdx = line.indexOf('=');
+        if (eqIdx > 0) {
+          const key = line.slice(0, eqIdx);
+          const val = line.slice(eqIdx + 1).trim();
+          vsEnv[key] = val;
+        }
+      }
+      return spawnSync(cmd, args, { ...opts, env: vsEnv });
+    }
+  }
+  // fallback: run directly
+  return spawnSync(cmd, args, opts);
 }
 
 // ---------------------------------------------------------------
@@ -106,7 +123,7 @@ if (isWin) {
   }
 
   configArgs = [
-    '-G', detectVsGenerator(),
+    '-G', 'Visual Studio 17 2022',
     '-A', 'x64',
     `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`,
     `-DVCPKG_TARGET_TRIPLET=x64-windows`,
@@ -179,7 +196,7 @@ if (isWin) {
 
 console.log('Running cmake configure...');
 {
-  const r = spawnSync('cmake', configArgs, { cwd: buildDir, stdio: 'inherit', env: { ...process.env } });
+  const r = vsSpawn('cmake', configArgs, { cwd: buildDir, stdio: 'inherit', env: { ...process.env } });
   if (r.status !== 0) {
     console.error('cmake configure failed');
     process.exit(1);
@@ -189,7 +206,7 @@ console.log('Running cmake configure...');
 // Build
 console.log('Running cmake build...');
 {
-  const r = spawnSync('cmake', ['--build', '.', '--config', 'Release'], { cwd: buildDir, stdio: 'inherit', env: { ...process.env } });
+  const r = vsSpawn('cmake', ['--build', '.', '--config', 'Release'], { cwd: buildDir, stdio: 'inherit', env: { ...process.env } });
   if (r.status !== 0) {
     console.error('cmake build failed');
     process.exit(1);
