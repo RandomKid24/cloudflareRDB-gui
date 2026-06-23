@@ -278,7 +278,11 @@ bool RdpSession::connect() {
 
   rdpSettings* settings = context_->settings;
   freerdp_settings_set_string(settings, FreeRDP_ServerHostname, host_.c_str());
+#if defined(FREERDP_VERSION_MAJOR) && FREERDP_VERSION_MAJOR >= 3
   freerdp_settings_set_string(settings, FreeRDP_UserSpecifiedServerName, serverHostname_.c_str());
+#else
+  freerdp_settings_set_string(settings, FreeRDP_ServerHostname, serverHostname_.c_str());
+#endif
   freerdp_settings_set_uint32(settings, FreeRDP_ServerPort, port_);
   freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, width_);
   freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, height_);
