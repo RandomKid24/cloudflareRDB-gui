@@ -1,10 +1,9 @@
 --- a/winpr/libwinpr/sspi/sspi_winpr.c
 +++ b/winpr/libwinpr/sspi/sspi_winpr.c
-@@ -35,6 +35,75 @@
- #include "../log.h"
+@@ -36,3 +36,56 @@
  #define TAG WINPR_TAG("sspi")
  
-+#ifdef _WIN32
+ +#ifdef _WIN32
 +#include <wchar.h>
 +
 +static const WCHAR sspi_PackageNameNTLM_W[] = L"NTLM";
@@ -66,31 +65,28 @@
 +}
 +#endif
 +
+ /* Authentication Functions: http://msdn.microsoft.com/en-us/library/windows/desktop/aa374731/ */
+@@ -310,4 +363,11 @@
+ void sspi_SecureHandleFree(SecHandle* handle)
+ {
+ 	free(handle);
+ }
++
 +static void* sspi_SecureHandleGetUpperPointer_Real(SecHandle* handle)
 +{
 +	return sspi_SecureHandleGetUpperPointer(handle);
 +}
 +#undef sspi_SecureHandleGetUpperPointer
 +#define sspi_SecureHandleGetUpperPointer(h) sspi_GetPackageNameA(sspi_SecureHandleGetUpperPointer_Real(h))
-+
- /* Authentication Functions: http://msdn.microsoft.com/en-us/library/windows/desktop/aa374731/ */
- 
- #include "NTLM/ntlm.h"
-@@ -1430,7 +1499,7 @@ static SECURITY_STATUS SEC_ENTRY winpr_QueryCredentialsAttributesW(PCredHandle p
+@@ -1430,4 +1490,4 @@
  	SEC_WCHAR* Name = nullptr;
  	SECURITY_STATUS status = 0;
  	const SecurityFunctionTableW* table = nullptr;
 -	Name = (SEC_WCHAR*)sspi_SecureHandleGetUpperPointer(phCredential);
 +	Name = (SEC_WCHAR*)sspi_GetPackageNameW(sspi_SecureHandleGetUpperPointer_Real(phCredential));
- 
- 	if (!Name)
- 		return SEC_E_SECPKG_NOT_FOUND;
-@@ -1483,7 +1552,7 @@ static SECURITY_STATUS SEC_ENTRY winpr_SetCredentialsAttributesW(PCredHandle phC
+@@ -1483,4 +1543,4 @@
  	SEC_WCHAR* Name = nullptr;
  	SECURITY_STATUS status = 0;
  	const SecurityFunctionTableW* table = nullptr;
 -	Name = (SEC_WCHAR*)sspi_SecureHandleGetUpperPointer(phCredential);
 +	Name = (SEC_WCHAR*)sspi_GetPackageNameW(sspi_SecureHandleGetUpperPointer_Real(phCredential));
- 
- 	if (!Name)
- 		return SEC_E_SECPKG_NOT_FOUND;

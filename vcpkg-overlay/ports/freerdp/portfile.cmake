@@ -9,7 +9,6 @@ vcpkg_from_github(
         ffmpeg.diff
         install-layout.patch
         windows-linkage.patch
-        sspi-packaged-unicode.patch
 )
 file(WRITE "${SOURCE_PATH}/.source_version" "${VERSION}-vcpkg")
 file(WRITE "${SOURCE_PATH}/CMakeCPack.cmake" "")
