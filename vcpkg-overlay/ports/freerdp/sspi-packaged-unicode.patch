@@ -1,0 +1,96 @@
+--- a/winpr/libwinpr/sspi/sspi_winpr.c
++++ b/winpr/libwinpr/sspi/sspi_winpr.c
+@@ -35,6 +35,75 @@
+ #include "../log.h"
+ #define TAG WINPR_TAG("sspi")
+ 
++#ifdef _WIN32
++#include <wchar.h>
++
++static const WCHAR sspi_PackageNameNTLM_W[] = L"NTLM";
++static const WCHAR sspi_PackageNameNegotiate_W[] = L"Negotiate";
++static const WCHAR sspi_PackageNameKerberos_W[] = L"Kerberos";
++static const WCHAR sspi_PackageNameCREDSSP_W[] = L"CREDSSP";
++static const WCHAR sspi_PackageNameSchannel_W[] = L"Schannel";
++
++static const char* sspi_GetPackageNameA(const void* ptr)
++{
++	const char* Name = (const char*)ptr;
++	if (Name && Name[0] != '\0' && Name[1] == '\0')
++	{
++		const WCHAR* NameW = (const WCHAR*)Name;
++		if (wcscmp(NameW, L"NTLM") == 0)
++			return "NTLM";
++		if (wcscmp(NameW, L"Negotiate") == 0)
++			return "Negotiate";
++		if (wcscmp(NameW, L"Kerberos") == 0)
++			return "Kerberos";
++		if (wcscmp(NameW, L"CREDSSP") == 0)
++			return "CREDSSP";
++		if (wcscmp(NameW, L"Schannel") == 0)
++			return "Schannel";
++	}
++	return Name;
++}
++
++static const WCHAR* sspi_GetPackageNameW(const void* ptr)
++{
++	const WCHAR* NameW = (const WCHAR*)ptr;
++	if (NameW)
++	{
++		const char* NameA = (const char*)ptr;
++		if (NameA[0] != '\0' && NameA[1] != '\0')
++		{
++			if (strcmp(NameA, "NTLM") == 0)
++				return sspi_PackageNameNTLM_W;
++			if (strcmp(NameA, "Negotiate") == 0)
++				return sspi_PackageNameNegotiate_W;
++			if (strcmp(NameA, "Kerberos") == 0)
++				return sspi_PackageNameKerberos_W;
++			if (strcmp(NameA, "CREDSSP") == 0)
++				return sspi_PackageNameCREDSSP_W;
++			if (strcmp(NameA, "Schannel") == 0)
++				return sspi_PackageNameSchannel_W;
++		}
++	}
++	return NameW;
++}
++#else
++static const char* sspi_GetPackageNameA(const void* ptr)
++{
++	return (const char*)ptr;
++}
++static const WCHAR* sspi_GetPackageNameW(const void* ptr)
++{
++	return (const WCHAR*)ptr;
++}
++#endif
++
++static void* sspi_SecureHandleGetUpperPointer_Real(SecHandle* handle)
++{
++	return sspi_SecureHandleGetUpperPointer(handle);
++}
++#undef sspi_SecureHandleGetUpperPointer
++#define sspi_SecureHandleGetUpperPointer(h) sspi_GetPackageNameA(sspi_SecureHandleGetUpperPointer_Real(h))
++
+ /* Authentication Functions: http://msdn.microsoft.com/en-us/library/windows/desktop/aa374731/ */
+ 
+ #include "NTLM/ntlm.h"
+@@ -1430,7 +1499,7 @@ static SECURITY_STATUS SEC_ENTRY winpr_QueryCredentialsAttributesW(PCredHandle p
+ 	SEC_WCHAR* Name = nullptr;
+ 	SECURITY_STATUS status = 0;
+ 	const SecurityFunctionTableW* table = nullptr;
+-	Name = (SEC_WCHAR*)sspi_SecureHandleGetUpperPointer(phCredential);
++	Name = (SEC_WCHAR*)sspi_GetPackageNameW(sspi_SecureHandleGetUpperPointer_Real(phCredential));
+ 
+ 	if (!Name)
+ 		return SEC_E_SECPKG_NOT_FOUND;
+@@ -1483,7 +1552,7 @@ static SECURITY_STATUS SEC_ENTRY winpr_SetCredentialsAttributesW(PCredHandle phC
+ 	SEC_WCHAR* Name = nullptr;
+ 	SECURITY_STATUS status = 0;
+ 	const SecurityFunctionTableW* table = nullptr;
+-	Name = (SEC_WCHAR*)sspi_SecureHandleGetUpperPointer(phCredential);
++	Name = (SEC_WCHAR*)sspi_GetPackageNameW(sspi_SecureHandleGetUpperPointer_Real(phCredential));
+ 
+ 	if (!Name)
+ 		return SEC_E_SECPKG_NOT_FOUND;

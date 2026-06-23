@@ -142,11 +142,6 @@ jobs:
           Write-Host "=== cmake toolchain ==="
           Test-Path C:\vcpkg\scripts\buildsystems\vcpkg.cmake
 
-      - name: Build desktop artifacts
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: ${{ matrix.build_command }}
-
       - name: Copy OpenSSL LEGACY provider into packaged app (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -184,6 +179,11 @@ jobs:
           Get-ChildItem -Path $releaseDir -ErrorAction SilentlyContinue | Select-Object Name, Length
           Write-Host "=== rdp-addon ossl-modules dir ==="
           Get-ChildItem -Path $osslModulesDir -ErrorAction SilentlyContinue | Select-Object Name, Length
+
+      - name: Build desktop artifacts
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: ${{ matrix.build_command }}
 
       - name: Verify addon compiled (Windows)
         if: runner.os == 'Windows'
