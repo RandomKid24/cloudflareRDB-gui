@@ -19,6 +19,16 @@ export function useLogs() {
   }, []);
 
   useEffect(() => {
+    // Fetch historical logs on mount
+    window.cloudflareRdp.tunnels.getLogs()
+      .then((history) => {
+        ringRef.current = history;
+        setLogs(history);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch historical logs:', err);
+      });
+
     const unsub = window.cloudflareRdp.tunnels.onLog((entry) => {
       const fullEntry: LogEntry = {
         ...entry,

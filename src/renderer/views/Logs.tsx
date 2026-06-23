@@ -6,11 +6,20 @@ import { TunnelWithState } from '../hooks/useTunnels';
 
 interface Props {
   tunnels: TunnelWithState[];
+  initialTunnelId?: string;
+  onClearFilter?: () => void;
 }
 
-export function Logs({ tunnels }: Props) {
+export function Logs({ tunnels, initialTunnelId, onClearFilter }: Props) {
   const { logs, autoScroll, setAutoScroll, exportLogs } = useLogs();
-  const [filterTunnelId, setFilterTunnelId] = useState<string | undefined>(undefined);
+  const [filterTunnelId, setFilterTunnelId] = useState<string | undefined>(initialTunnelId);
+
+  const handleSelectFilter = (id: string | undefined) => {
+    setFilterTunnelId(id);
+    if (!id && onClearFilter) {
+      onClearFilter();
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -19,11 +28,11 @@ export function Logs({ tunnels }: Props) {
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Logs</h1>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <FilterChip active={!filterTunnelId} onClick={() => setFilterTunnelId(undefined)}>
+          <FilterChip active={!filterTunnelId} onClick={() => handleSelectFilter(undefined)}>
             All Tunnels
           </FilterChip>
           {tunnels.map((t) => (
-            <FilterChip key={t.id} active={filterTunnelId === t.id} onClick={() => setFilterTunnelId(t.id)}>
+            <FilterChip key={t.id} active={filterTunnelId === t.id} onClick={() => handleSelectFilter(t.id)}>
               {t.name}
             </FilterChip>
           ))}

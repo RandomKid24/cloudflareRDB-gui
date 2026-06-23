@@ -342,43 +342,60 @@ export function RdpView({ tunnel, onBack }: Props) {
         </div>
       )}
 
-      {status === 'error' && error && !passwordUpdateRequired && (
-        <div style={{
-          position: 'absolute',
-          top: 48, left: 16, right: 16,
-          padding: '12px',
-          background: 'rgba(239,68,68,0.9)',
-          color: '#fff',
-          borderRadius: 4,
-          fontSize: 12,
-          zIndex: 100,
-          fontFamily: 'monospace',
-          whiteSpace: 'pre-wrap',
-        }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>RDP View Error</div>
-          {error}
-          <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-            <button onClick={handleRetry} style={{
-              padding: '6px 14px', fontSize: 12, fontWeight: 600,
-              background: '#fff', color: '#222', border: 'none', borderRadius: 4, cursor: 'pointer',
-            }}>
-              Retry Connection
-            </button>
-            <button onClick={handleLaunchNativeClient} style={{
-              padding: '6px 14px', fontSize: 12,
-              background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 4, cursor: 'pointer',
-            }}>
-              Open Native Client
-            </button>
-            <button onClick={handleBack} style={{
-              padding: '6px 14px', fontSize: 12,
-              background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 4, cursor: 'pointer',
-            }}>
-              Cancel
-            </button>
+      {status === 'error' && error && !passwordUpdateRequired && (() => {
+        const { title, desc } = getFriendlyErrorMessage(error);
+        return (
+          <div style={{
+            position: 'absolute',
+            top: 48, left: 16, right: 16,
+            padding: '16px',
+            background: 'rgba(220, 38, 38, 0.95)',
+            backdropFilter: 'blur(8px)',
+            color: '#fff',
+            borderRadius: 6,
+            fontSize: 13,
+            zIndex: 100,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              {title}
+            </div>
+            <div style={{ opacity: 0.9, lineHeight: 1.5, whiteSpace: 'pre-wrap', marginBottom: 12 }}>{desc}</div>
+            {error !== desc && (
+              <details style={{ marginTop: 8, fontSize: 11, background: 'rgba(0,0,0,0.2)', padding: '6px 8px', borderRadius: 4 }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}>Technical Details</summary>
+                <div style={{ marginTop: 4, fontFamily: 'monospace', opacity: 0.8, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{error}</div>
+              </details>
+            )}
+            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+              <button onClick={handleRetry} style={{
+                padding: '6px 14px', fontSize: 12, fontWeight: 600,
+                background: '#fff', color: '#222', border: 'none', borderRadius: 4, cursor: 'pointer',
+              }}>
+                Retry Connection
+              </button>
+              <button onClick={handleLaunchNativeClient} style={{
+                padding: '6px 14px', fontSize: 12,
+                background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 4, cursor: 'pointer',
+              }}>
+                Open Native Client
+              </button>
+              <button onClick={handleBack} style={{
+                padding: '6px 14px', fontSize: 12,
+                background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 4, cursor: 'pointer',
+              }}>
+                Cancel
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {status === 'connecting' && (
         <div style={{

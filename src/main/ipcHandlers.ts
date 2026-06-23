@@ -5,13 +5,17 @@ import { getTunnels, setTunnels, getSettings, setSettings } from './store';
 import { credentialStore } from './credentialStore';
 import { TunnelManager } from './tunnelManager';
 import { RdpViewManager } from './rdpViewManager';
-import { getCombinedLogs, writeLog } from './logger';
+import { getCombinedLogs, writeLog, getLogs } from './logger';
 
 const isWin = process.platform === 'win32';
 
 export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager?: RdpViewManager): void {
   ipcMain.handle(IPC_CHANNELS.TUNNELS_LIST, () => {
     return getTunnels();
+  });
+
+  ipcMain.handle('tunnels:get-logs', (_event, tunnelId?: string) => {
+    return getLogs(tunnelId);
   });
 
   ipcMain.handle('tunnels:decrypt-password', async (_event, encryptedBase64: string) => {

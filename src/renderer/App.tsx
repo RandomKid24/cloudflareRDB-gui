@@ -10,6 +10,7 @@ type Tab = 'tunnels' | 'logs' | 'settings';
 function App() {
   const [tab, setTab] = useState<Tab>('tunnels');
   const [viewingTunnel, setViewingTunnel] = useState<TunnelWithState | null>(null);
+  const [selectedLogTunnelId, setSelectedLogTunnelId] = useState<string | undefined>(undefined);
   const { tunnels, loading, add, update, remove, connect, disconnect } = useTunnels();
 
   const navItems: { id: Tab; label: string }[] = [
@@ -75,9 +76,19 @@ function App() {
             onConnect={connect}
             onDisconnect={disconnect}
             onViewScreen={setViewingTunnel}
+            onViewLogs={(tunnelId) => {
+              setSelectedLogTunnelId(tunnelId);
+              setTab('logs');
+            }}
           />
         )}
-        {tab === 'logs' && <Logs tunnels={tunnels} />}
+        {tab === 'logs' && (
+          <Logs
+            tunnels={tunnels}
+            initialTunnelId={selectedLogTunnelId}
+            onClearFilter={() => setSelectedLogTunnelId(undefined)}
+          />
+        )}
         {tab === 'settings' && <Settings />}
       </main>
     </div>

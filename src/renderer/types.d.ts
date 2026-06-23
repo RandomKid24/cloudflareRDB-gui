@@ -11,6 +11,7 @@ declare global {
         connect: (tunnelId: string) => Promise<void>;
         disconnect: (tunnelId: string) => Promise<void>;
         exportLogs: (tunnelId?: string) => Promise<void>;
+        getLogs: (tunnelId?: string) => Promise<LogEntry[]>;
         onStatusChange: (callback: (state: TunnelRuntimeState) => void) => () => void;
         onLog: (callback: (entry: Omit<LogEntry, 'id' | 'timestamp'>) => void) => () => void;
         onTrayConnect: (callback: (tunnelId: string) => void) => () => void;

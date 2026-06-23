@@ -135,6 +135,20 @@ export class RdpViewManager {
   }
 
   private handleEvent(tunnelId: string, type: string, args: any[]) {
+    // Log the event to our main logger
+    const firstArg = args[0] !== undefined ? String(args[0]) : '';
+    if (type === 'error') {
+      writeLog(tunnelId, 'RDP View', 'error', `RDP connection error: ${firstArg}`);
+    } else if (type === 'disconnected') {
+      writeLog(tunnelId, 'RDP View', 'info', `RDP session disconnected: ${firstArg || 'Session closed'}`);
+    } else if (type === 'resize') {
+      const width = args[0];
+      const height = args[1];
+      writeLog(tunnelId, 'RDP View', 'info', `RDP session resized to ${width}x${height}`);
+    } else {
+      writeLog(tunnelId, 'RDP View', 'debug', `RDP session event [${type}]: ${firstArg}`);
+    }
+
     if (!this.win || this.win.isDestroyed()) return;
     try {
       this.win.webContents.send('rdp:event', tunnelId, type, ...args);

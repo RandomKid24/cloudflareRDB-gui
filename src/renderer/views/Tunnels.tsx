@@ -12,9 +12,10 @@ interface Props {
   onConnect: (id: string) => void;
   onDisconnect: (id: string) => void;
   onViewScreen: (tunnel: TunnelWithState) => void;
+  onViewLogs: (tunnelId: string) => void;
 }
 
-export function Tunnels({ tunnels, loading, onAdd, onUpdate, onDelete, onConnect, onDisconnect, onViewScreen }: Props) {
+export function Tunnels({ tunnels, loading, onAdd, onUpdate, onDelete, onConnect, onDisconnect, onViewScreen, onViewLogs }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [editingTunnel, setEditingTunnel] = useState<TunnelWithState | null>(null);
 
@@ -110,6 +111,7 @@ export function Tunnels({ tunnels, loading, onAdd, onUpdate, onDelete, onConnect
             onEdit={handleEdit}
             onDelete={onDelete}
             onViewScreen={() => onViewScreen(tunnel)}
+            onViewLogs={() => onViewLogs(tunnel.id)}
           />
         ))}
       </div>

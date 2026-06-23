@@ -24,6 +24,9 @@ const api = {
     exportLogs: (tunnelId?: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.TUNNELS_EXPORT_LOGS, tunnelId),
 
+    getLogs: (tunnelId?: string): Promise<LogEntry[]> =>
+      ipcRenderer.invoke('tunnels:get-logs', tunnelId),
+
     onStatusChange: (callback: (state: TunnelRuntimeState) => void) => {
       const handler = (_event: any, state: TunnelRuntimeState) => callback(state);
       ipcRenderer.on(IPC_CHANNELS.TUNNEL_STATUS_CHANGE, handler);

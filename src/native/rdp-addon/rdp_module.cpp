@@ -51,21 +51,21 @@ public:
 
   void onResize(int w, int h) override {
     resizeCb_.BlockingCall([w, h](Napi::Env env, Napi::Function jsCallback) {
-      jsCallback.Call({ Napi::Number::New(env, w), Napi::Number::New(env, h) });
+      jsCallback.Call({ Napi::String::New(env, "resize"), Napi::Number::New(env, w), Napi::Number::New(env, h) });
     });
   }
 
   void onDisconnect(const char* reason) override {
     std::string r(reason);
     disconnectCb_.BlockingCall([r](Napi::Env env, Napi::Function jsCallback) {
-      jsCallback.Call({ Napi::String::New(env, r) });
+      jsCallback.Call({ Napi::String::New(env, "disconnected"), Napi::String::New(env, r) });
     });
   }
 
   void onError(const char* msg) override {
     std::string m(msg);
     errorCb_.BlockingCall([m](Napi::Env env, Napi::Function jsCallback) {
-      jsCallback.Call({ Napi::String::New(env, m) });
+      jsCallback.Call({ Napi::String::New(env, "error"), Napi::String::New(env, m) });
     });
   }
 
