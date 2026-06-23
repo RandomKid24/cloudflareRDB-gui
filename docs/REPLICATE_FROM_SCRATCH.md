@@ -100,32 +100,41 @@ C++ endPaint → BGR→RGBA swap → Napi::Buffer::Copy()
 
 ### Required Tools
 
-| Tool         | Version                                         | Purpose                |
-| ------------ | ----------------------------------------------- | ---------------------- |
-| Node.js      | 18+                                             | Runtime & build        |
-| npm          | 9+                                              | Package manager        |
-| cmake        | 3.20+                                           | C++ addon build        |
-| C++ compiler | VS 2022 (Win) / Apple Clang (Mac) / GCC (Linux) | C++17 compilation      |
-| FreeRDP      | 3.x (dev headers)                               | RDP protocol library   |
-| OpenSSL      | 3.x (dev headers)                               | Cryptography (for RC4) |
+| Tool              | Version                                                    | Purpose                |
+| ----------------- | ---------------------------------------------------------- | ---------------------- |
+| Node.js           | 18+                                                        | Runtime & build        |
+| npm               | 9+                                                         | Package manager        |
+| cmake             | 3.20+                                                      | C++ addon build        |
+| C++ compiler      | VS 2022/2026 BuildTools (Win) / Apple Clang (Mac) / GCC (Linux) | C++17 compilation      |
+| FreeRDP           | 3.x (dev headers)                                          | RDP protocol library   |
+| OpenSSL           | 3.x (dev headers)                                          | Cryptography (for RC4) |
 
 ### Platform-Specific Setup
 
-**Windows:**
+**Windows (PowerShell as Administrator):**
 
 ```powershell
-# Install vcpkg
-git clone https://github.com/Microsoft/vcpkg.git
-cd vcpkg
-.\bootstrap-vcpkg.bat
-.\vcpkg integrate install
+# 1. Install Visual Studio Build Tools (MSVC compiler)
+winget install Microsoft.VisualStudio.2022.BuildTools --override "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.Windows11SDK.22621 --includeRecommended --passive"
 
-# Install FreeRDP 3 and OpenSSL
-.\vcpkg install freerdp:x64-windows openssl:x64-windows
+# 2. Install CMake
+winget install Kitware.CMake
 
-# Set environment variables
-$env:VCPKG_ROOT = "C:\vcpkg"
-$env:VCPKG_INSTALLATION_ROOT = "C:\vcpkg"
+# 3. Install vcpkg
+git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+C:\vcpkg\bootstrap-vcpkg.bat
+
+# 4. Install FreeRDP 3 and OpenSSL (compiles from source, ~15min)
+C:\vcpkg\vcpkg install freerdp:x64-windows
+
+# 5. Set environment variable (optional, cmake-js auto-detects)
+[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT", "C:\vcpkg", "Machine")
+
+# 6. Clone and build the addon
+cd C:\path\to\TunnelGate
+npm install
+$env:CMAKE_GENERATOR = "Visual Studio 17 2022"
+npm run build:native
 ```
 
 **macOS:**
@@ -1240,6 +1249,18 @@ activate = 1
 
 **`scripts/build-native.js`:**
 
+### Visual Studio Auto-Detection
+
+On Windows, the script uses `detectVs()` to find the installed Visual Studio instance:
+
+1. **Scans known paths** for `vcvarsall.bat` (VS 2022 BuildTools, VS 2026 Enterprise, etc.)
+2. **Maps each path** to its correct CMake generator string (e.g., `2022\BuildTools` → `Visual Studio 17 2022`, `18\Enterprise` → `Visual Studio 18 2026`)
+3. **Captures the VS environment** by running `vcvarsall.bat x64 >nul && set`, parses the output, and spawns cmake with the merged environment
+
+This replaced the old `vswhere`-based detection which broke when:
+- `ProgramFiles(x86)` env var had a non-standard value (missing space)
+- vswhere returned no instances on some CI machines
+
 ### Steps
 
 1. **Download Electron headers**: `cmake-js install --runtime=electron --runtime-version=31.7.7 --arch=arm64/x64`
@@ -2265,6 +2286,8 @@ rdpSettings* settings = instance->context->settings;
 
 **Key Rule:** In FreeRDP 3, `instance->settings` was REMOVED. Always use `instance->context->settings` for `freerdp*` pointers, or `ctx->settings` directly in `rdpContext*` callbacks.
 
+**Additional Note (vcpkg FreeRDP 3.26.0+):** Beyond the API access pattern change, newer FreeRDP 3.x from vcpkg requires an **explicit include** of `<freerdp/settings.h>` — it is no longer transitively included by `<freerdp/freerdp.h>`. Without it, you get `error C2079: 'freerdp' uses undefined struct 'rdp_settings'`. See **Bug 16** for the full compilation fix.
+
 ---
 
 ### Bug 7: CRT Runtime Mismatch (`/MT` vs `/MD`) — Heap Corruption
@@ -2756,6 +2779,49 @@ The original `detectVsGenerator()` built the vswhere path using `process.env['Pr
 
 **Related Files:**
 - `scripts/build-native.js`:62-113 — `detectVs()`, `vsSpawn()`, and `vsDetected` usage
+
+---
+
+### Bug 16: NLA Security Error (SEC_E_SECPKG_NOT_FOUND) and Missing `<freerdp/settings.h>` Include
+
+**Severity:** Connection-blocker
+
+**Symptom:**
+```
+[ERROR] freerdp_set_last_error_ex: ERRCONNECT_LOGON_FAILURE [0x00020014]
+[ERROR] Failed to connect to xxx
+NLA code did not complete within 10 seconds. HRESULT: SEC_E_SECPKG_NOT_FOUND(0x80090311)
+```
+
+**Root Cause (NLA):**
+`rdp_session.cpp` set `FreeRDP_NlaSecurity = TRUE` (default). The NLA (Network Level Authentication) handshake uses Kerberos/NTLM to verify the server's identity via SPN. When connecting through a Cloudflare TCP tunnel, the client connects to `localhost:<tunnel-port>`, not the actual server hostname. The SPN check fails because the SPN is bound to the tunnel endpoint, not the RDP server — `SEC_E_SECPKG_NOT_FOUND` means no security package can validate the SPN for the tunnel address.
+
+**Root Cause (Compilation):**
+vcpkg's FreeRDP 3.x (3.26.0+) restructured headers. `<freerdp/settings.h>` is no longer transitively included by `<freerdp/freerdp.h>`. This caused:
+```
+error C2079: 'freerdp' uses undefined struct 'rdp_settings'
+```
+Additionally, `CMakeLists.txt` referenced `napi.h` via an absolute path that assumed the addon lived directly under `node_modules/` — but `cmake-js` provides the correct include paths via `CMAKE_JS_INC`, so the hardcoded path was removed.
+
+**The Fix:**
+
+1. **Disable NLA security** — `src/native/rdp-addon/rdp_session.cpp`:
+   ```cpp
+   freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
+   ```
+   This allows RDP connection without Kerberos SPN validation, which is safe over the encrypted Cloudflare TCP tunnel.
+
+2. **Add explicit include** — `src/native/rdp-addon/rdp_session.cpp`:
+   ```cpp
+   #include <freerdp/settings.h>
+   ```
+
+3. **Remove hardcoded napi.h include path** — `src/native/rdp-addon/CMakeLists.txt`: removed `include_directories(...)`, cmake-js provides it via `CMAKE_JS_INC`.
+
+**Related Files:**
+- `src/native/rdp-addon/rdp_session.cpp`:1 — added `<freerdp/settings.h>` include
+- `src/native/rdp-addon/rdp_session.cpp` — set `FreeRDP_NlaSecurity` to `FALSE`
+- `src/native/rdp-addon/CMakeLists.txt` — removed hardcoded `include_directories` for napi.h
 
 ---
 
