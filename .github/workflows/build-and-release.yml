@@ -59,7 +59,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\vcpkg\installed
-          key: vcpkg-freerdp-2.11.2-v7-${{ hashFiles('vcpkg-overlay/ports/freerdp/**') }}
+          key: vcpkg-freerdp-2.11.2-v8-${{ hashFiles('vcpkg-overlay/ports/freerdp/**') }}
 
       - name: Install FreeRDP (Linux)
         if: runner.os == 'Linux'
@@ -123,7 +123,7 @@ jobs:
               Write-Host "Normalized: $($_.Name)"
           }
 
-          Write-Host "=== Installing FreeRDP via vcpkg overlay (WITH_NATIVE_SSPI=OFF) ==="
+          Write-Host "=== Installing FreeRDP via vcpkg overlay (WITH_NATIVE_SSPI=ON) ==="
           & "$vcpkgRoot\vcpkg" install freerdp:x64-windows --no-binarycaching --classic --overlay-ports="${{ github.workspace }}\vcpkg-overlay\ports"
           if ($LASTEXITCODE -ne 0) {
             Write-Host "vcpkg install failed!"
