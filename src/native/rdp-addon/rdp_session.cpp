@@ -354,9 +354,13 @@ bool RdpSession::connect() {
   }
 
   // Security: enable all protocols — server chooses HYBRID (NLA + TLS).
-  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, TRUE);
+#ifdef _WIN32
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, FALSE);
+#else
+  freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE);
+#endif
 
   // Set TLS security level to 1 (instead of OpenSSL 3.x default of 2).
   // This allows connecting to servers with self-signed certificates or smaller key sizes (e.g. 1024-bit).
