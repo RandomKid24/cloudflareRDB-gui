@@ -34,9 +34,15 @@ export class CredentialStore {
       return;
     }
 
-    const targets = [`TERMSRV/localhost:${port}`, `TERMSRV/127.0.0.1:${port}`];
+    const targets = [
+      `TERMSRV/localhost:${port}`,
+      `TERMSRV/127.0.0.1:${port}`,
+      `TERMSRV/localhost`,
+      `TERMSRV/127.0.0.1`,
+    ];
     if (tunnelHostname) {
       targets.push(`TERMSRV/${tunnelHostname}:${port}`);
+      targets.push(`TERMSRV/${tunnelHostname}`);
     }
     for (const target of targets) {
       await new Promise<void>((resolve, reject) => {
@@ -73,9 +79,15 @@ export class CredentialStore {
       return;
     }
 
-    const targets = [`TERMSRV/localhost:${port}`, `TERMSRV/127.0.0.1:${port}`];
+    const targets = [
+      `TERMSRV/localhost:${port}`,
+      `TERMSRV/127.0.0.1:${port}`,
+      `TERMSRV/localhost`,
+      `TERMSRV/127.0.0.1`,
+    ];
     if (tunnelHostname) {
       targets.push(`TERMSRV/${tunnelHostname}:${port}`);
+      targets.push(`TERMSRV/${tunnelHostname}`);
     }
     for (const target of targets) {
       await new Promise<void>((resolve) => {
