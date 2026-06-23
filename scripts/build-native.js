@@ -267,9 +267,18 @@ if (isWin) {
   // Copy VC++ runtime DLLs (msvcp140, vcruntime140, vcruntime140_1)
   // These are needed for the addon and FreeRDP DLLs on systems without Visual Studio.
   const vcDlls = ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];
-  const vswhere = spawnSync('vswhere', ['-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-property', 'installationPath'], { encoding: 'utf8' });
-  if (vswhere.status === 0 && vswhere.stdout) {
-    const vsPath = vswhere.stdout.trim().split('\n')[0];
+  const vswherePaths = [
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe'),
+    path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe'),
+    'vswhere',
+  ];
+  let vswhereResult = null;
+  for (const vsp of vswherePaths) {
+    const r = spawnSync(vsp, ['-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-property', 'installationPath'], { encoding: 'utf8' });
+    if (r.status === 0 && r.stdout) { vswhereResult = r; break; }
+  }
+  if (vswhereResult) {
+    const vsPath = vswhereResult.stdout.trim().split('\n')[0];
     const msvcRoot = path.join(vsPath, 'VC', 'Tools', 'MSVC');
     if (fs.existsSync(msvcRoot)) {
       const msvcVersions = fs.readdirSync(msvcRoot).filter(d => /^14\./.test(d));

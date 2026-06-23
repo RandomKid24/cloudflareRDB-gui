@@ -279,10 +279,15 @@ bool RdpSession::connect() {
 
   rdpSettings* settings = context_->settings;
   freerdp_settings_set_string(settings, FreeRDP_ServerHostname, host_.c_str());
+  // FreeRDP 3.x: UserSpecifiedServerName must ONLY differ from ServerHostname
+  // when NOT connecting through a local tunnel. When the target is 127.0.0.1
+  // (cloudflared tunnel), UserSpecifiedServerName causes FreeRDP to resolve
+  // the real hostname and bypass the tunnel entirely. Credentials are already
+  // injected via cmdkey for TERMSRV/127.0.0.1:port, so keep both names equal.
 #if defined(FREERDP_VERSION_MAJOR) && FREERDP_VERSION_MAJOR >= 3
-  freerdp_settings_set_string(settings, FreeRDP_UserSpecifiedServerName, serverHostname_.c_str());
+  freerdp_settings_set_string(settings, FreeRDP_UserSpecifiedServerName, host_.c_str());
 #else
-  freerdp_settings_set_string(settings, FreeRDP_ServerHostname, serverHostname_.c_str());
+  freerdp_settings_set_string(settings, FreeRDP_ServerHostname, host_.c_str());
 #endif
   freerdp_settings_set_uint32(settings, FreeRDP_ServerPort, port_);
   freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, width_);
