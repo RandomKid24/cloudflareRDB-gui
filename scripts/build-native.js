@@ -59,22 +59,28 @@ fs.mkdirSync(addonOutDir, { recursive: true });
   console.log(`  cmake: ${r.stdout.split('\n')[0]}`);
 }
 
-// Find vcvarsall.bat from available Visual Studio installations
-function findVcvarsAll() {
+// Detect VS generator and find vcvarsall.bat
+function detectVs() {
   const candidates = [
-    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat',
-    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat',
-    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Professional\\VC\\Auxiliary\\Build\\vcvarsall.bat',
-    'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat',
-    'C:\\Program Files\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat',
-    'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat',
-    'C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Auxiliary\\Build\\vcvarsall.bat',
-    'C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat',
-    'C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat',
+    { path: 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 17 2022' },
+    { path: 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 17 2022' },
+    { path: 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Professional\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 17 2022' },
+    { path: 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 17 2022' },
+    { path: 'C:\\Program Files\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 17 2022' },
+    { path: 'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 17 2022' },
+    { path: 'C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 17 2022' },
+    { path: 'C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 17 2022' },
+    { path: 'C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 18 2026' },
+    { path: 'C:\\Program Files\\Microsoft Visual Studio\\18\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 18 2026' },
+    { path: 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 18 2026' },
+    { path: 'C:\\Program Files\\Microsoft Visual Studio\\18\\Professional\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 18 2026' },
+    { path: 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 16 2019' },
+    { path: 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat', generator: 'Visual Studio 15 2017' },
   ];
   for (const c of candidates) {
-    if (fs.existsSync(c)) {
-      console.log(`  Found vcvarsall: ${c}`);
+    if (fs.existsSync(c.path)) {
+      console.log(`  Found vcvarsall: ${c.path}`);
+      console.log(`  Using generator: ${c.generator}`);
       return c;
     }
   }
@@ -82,11 +88,10 @@ function findVcvarsAll() {
 }
 
 // Spawn a command within a VS developer command prompt
-function vsSpawn(cmd, args, opts) {
-  const vcvarsall = findVcvarsAll();
-  if (vcvarsall) {
+function vsSpawn(cmd, args, opts, vs) {
+  if (vs) {
     // Capture VS environment by running vcvarsall then "set"
-    const envOut = spawnSync('cmd.exe', ['/d', '/s', '/c', `call "${vcvarsall}" x64 >nul && set`], { encoding: 'utf8', env: { ...process.env } });
+    const envOut = spawnSync('cmd.exe', ['/d', '/s', '/c', `call "${vs.path}" x64 >nul && set`], { encoding: 'utf8', env: { ...process.env } });
     if (envOut.status === 0 && envOut.stdout) {
       const vsEnv = { ...process.env };
       for (const line of envOut.stdout.split('\n')) {
@@ -100,9 +105,12 @@ function vsSpawn(cmd, args, opts) {
       return spawnSync(cmd, args, { ...opts, env: vsEnv });
     }
   }
-  // fallback: run directly
   return spawnSync(cmd, args, opts);
 }
+
+// Detect Visual Studio (vcvarsall + CMake generator)
+const vsDetected = detectVs();
+const vsGenerator = vsDetected ? vsDetected.generator : 'Visual Studio 17 2022';
 
 // ---------------------------------------------------------------
 // Determine FreeRDP root (shared between cmake config and dylib copy)
@@ -123,7 +131,7 @@ if (isWin) {
   }
 
   configArgs = [
-    '-G', 'Visual Studio 17 2022',
+    '-G', vsGenerator,
     '-A', 'x64',
     `-DCMAKE_TOOLCHAIN_FILE=${toolchain}`,
     `-DVCPKG_TARGET_TRIPLET=x64-windows`,
@@ -196,7 +204,7 @@ if (isWin) {
 
 console.log('Running cmake configure...');
 {
-  const r = vsSpawn('cmake', configArgs, { cwd: buildDir, stdio: 'inherit', env: { ...process.env } });
+  const r = vsSpawn('cmake', configArgs, { cwd: buildDir, stdio: 'inherit', env: { ...process.env } }, vsDetected);
   if (r.status !== 0) {
     console.error('cmake configure failed');
     process.exit(1);
@@ -206,7 +214,7 @@ console.log('Running cmake configure...');
 // Build
 console.log('Running cmake build...');
 {
-  const r = vsSpawn('cmake', ['--build', '.', '--config', 'Release'], { cwd: buildDir, stdio: 'inherit', env: { ...process.env } });
+  const r = vsSpawn('cmake', ['--build', '.', '--config', 'Release'], { cwd: buildDir, stdio: 'inherit', env: { ...process.env } }, vsDetected);
   if (r.status !== 0) {
     console.error('cmake build failed');
     process.exit(1);
