@@ -76,6 +76,7 @@ vcpkg_cmake_configure(
         -DWITH_CLANG_FORMAT=OFF
         -DWITH_MANPAGES=OFF
         -DWITH_OPENSSL=ON
+        -DWITH_NATIVE_SSPI=OFF
         -DWITH_SAMPLE=OFF
         -DWITH_UNICODE_BUILTIN=ON
         "-DMSVC_RUNTIME=${VCPKG_CRT_LINKAGE}"
