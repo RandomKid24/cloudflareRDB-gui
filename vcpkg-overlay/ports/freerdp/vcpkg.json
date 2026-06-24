@@ -22,6 +22,9 @@
     },
     "zlib"
   ],
+  "default-features": [
+    "client"
+  ],
   "features": {
     "av1": {
       "description": "Enable AV1 support for GFX channel encoding/decoding"
