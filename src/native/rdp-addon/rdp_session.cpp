@@ -7,6 +7,18 @@
 #include <winpr/sspi.h>
 #include <thread>
 #include <chrono>
+static void fileLog(const char* msg) {
+#ifdef _WIN32
+  FILE* f = fopen("C:\\Users\\Ady\\Desktop\\cloudflareRDB-gui\\addon-debug.log", "a");
+  if (f) {
+    fprintf(f, "%s\n", msg);
+    fclose(f);
+  }
+#else
+  fprintf(stderr, "%s\n", msg);
+  fflush(stderr);
+#endif
+}
 
 #ifdef _WIN32
 #include <windows.h>
@@ -21,14 +33,6 @@ static std::string normalizePath(const std::string& path) {
     return path.substr(4);
   }
   return path;
-}
-
-static void fileLog(const char* msg) {
-  FILE* f = fopen("C:\\Users\\Ady\\Desktop\\cloudflareRDB-gui\\addon-debug.log", "a");
-  if (f) {
-    fprintf(f, "%s\n", msg);
-    fclose(f);
-  }
 }
 
 static void logOpenSSLErrors() {
