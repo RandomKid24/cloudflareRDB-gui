@@ -191,12 +191,10 @@ static DWORD verifyCertificateCallback(freerdp* instance, const char* common_nam
                                        const char* fingerprint, BOOL host_mismatch) {
   const char* host = freerdp_settings_get_string(instance->context->settings, FreeRDP_ServerHostname);
   if (host && (strcmp(host, "127.0.0.1") == 0 || strcmp(host, "localhost") == 0)) {
-    fprintf(stderr, "[RDP] verifyCertificateCallback: Accepting loopback cert for %s\n", host);
-    fflush(stderr);
+    fileLog((std::string("[RDP] verifyCertificateCallback: Accepting loopback cert for ") + host).c_str());
     return 1; // Trust loopback certificate
   }
-  fprintf(stderr, "[RDP] verifyCertificateCallback: Rejecting non-loopback cert for %s\n", host ? host : "(null)");
-  fflush(stderr);
+  fileLog((std::string("[RDP] verifyCertificateCallback: Rejecting non-loopback cert for ") + (host ? host : "(null)")).c_str());
   return 0; // Reject others
 }
 
@@ -206,12 +204,10 @@ static DWORD verifyChangedCertificateCallback(freerdp* instance, const char* com
                                               const char* old_issuer, const char* old_fingerprint) {
   const char* host = freerdp_settings_get_string(instance->context->settings, FreeRDP_ServerHostname);
   if (host && (strcmp(host, "127.0.0.1") == 0 || strcmp(host, "localhost") == 0)) {
-    fprintf(stderr, "[RDP] verifyChangedCertificateCallback: Accepting changed loopback cert for %s\n", host);
-    fflush(stderr);
+    fileLog((std::string("[RDP] verifyChangedCertificateCallback: Accepting changed loopback cert for ") + host).c_str());
     return 1; // Trust changed loopback certificate
   }
-  fprintf(stderr, "[RDP] verifyChangedCertificateCallback: Rejecting changed non-loopback cert for %s\n", host ? host : "(null)");
-  fflush(stderr);
+  fileLog((std::string("[RDP] verifyChangedCertificateCallback: Rejecting changed non-loopback cert for ") + (host ? host : "(null)")).c_str());
   return 0; // Reject others
 }
 
@@ -278,7 +274,7 @@ bool RdpSession::connect() {
   // manifests as the "packageName=N" / ERRCONNECT_AUTHENTICATION_FAILED error.
   // This call is idempotent — safe to call multiple times.
   sspi_GlobalInit();
-  fprintf(stderr, "[RDP] sspi_GlobalInit() called successfully\n");
+  fileLog("[RDP] sspi_GlobalInit() called successfully");
   instance_ = freerdp_new();
   if (!instance_) {
     lastError_ = "freerdp_new failed";
@@ -318,7 +314,7 @@ bool RdpSession::connect() {
   freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 32);
 
   if (username_.empty()) {
-    fprintf(stderr, "[RDP] ERROR: no username provided, cannot authenticate\n");
+    fileLog("[RDP] ERROR: no username provided, cannot authenticate");
     lastError_ = "No username provided for RDP authentication";
     if (listener_) listener_->onError(lastError_.c_str());
     freerdp_context_free(instance_);
@@ -350,18 +346,13 @@ bool RdpSession::connect() {
       } else {
         freerdp_settings_set_string(settings, FreeRDP_Domain, "");
       }
-      fprintf(stderr, "[RDP] parsed domain='%s' user='%s' from username='%s'\n",
-              parsedDomain ? parsedDomain : "", parsedUser ? parsedUser : "", normUsername.c_str());
+      fileLog((std::string("[RDP] parsed domain='") + (parsedDomain ? parsedDomain : "") + "' user='" + (parsedUser ? parsedUser : "") + "' from username='" + normUsername + "'").c_str());
       free(parsedUser);
       free(parsedDomain);
     } else {
       freerdp_settings_set_string(settings, FreeRDP_Domain, "");
     }
-    fprintf(stderr, "[RDP] credentials: username='%s' domain='%s' password_len=%zu\n",
-            freerdp_settings_get_string(settings, FreeRDP_Username),
-            freerdp_settings_get_string(settings, FreeRDP_Domain) ? freerdp_settings_get_string(settings, FreeRDP_Domain) : "",
-            password_.length());
-    fflush(stderr);
+    fileLog((std::string("[RDP] credentials: username='") + (freerdp_settings_get_string(settings, FreeRDP_Username) ? freerdp_settings_get_string(settings, FreeRDP_Username) : "") + "' domain='" + (freerdp_settings_get_string(settings, FreeRDP_Domain) ? freerdp_settings_get_string(settings, FreeRDP_Domain) : "") + "' password_len=" + std::to_string(password_.length())).c_str());
   }
 
   // Security: enable NLA + TLS + RDP on all platforms.
@@ -399,16 +390,14 @@ bool RdpSession::connect() {
 
   const char* actualHost = freerdp_settings_get_string(settings, FreeRDP_ServerHostname);
   UINT32 actualPort = freerdp_settings_get_uint32(settings, FreeRDP_ServerPort);
-  fprintf(stderr, "[RDP] AUTH_TUPLE: host='%s', port=%u, username='%s', domain='%s', password_len=%zu, IgnoreCertificate=%d, NlaSecurity=%d, TlsSecurity=%d\n",
-          actualHost ? actualHost : "(null)",
-          actualPort,
-          freerdp_settings_get_string(settings, FreeRDP_Username) ? freerdp_settings_get_string(settings, FreeRDP_Username) : "(null)",
-          freerdp_settings_get_string(settings, FreeRDP_Domain) ? freerdp_settings_get_string(settings, FreeRDP_Domain) : "(null)",
-          password_.length(),
-          freerdp_settings_get_bool(settings, FreeRDP_IgnoreCertificate) ? 1 : 0,
-          freerdp_settings_get_bool(settings, FreeRDP_NlaSecurity) ? 1 : 0,
-          freerdp_settings_get_bool(settings, FreeRDP_TlsSecurity) ? 1 : 0);
-  fflush(stderr);
+  fileLog((std::string("[RDP] AUTH_TUPLE: host='") + (actualHost ? actualHost : "null") +
+           "', port=" + std::to_string(actualPort) +
+           ", username='" + (freerdp_settings_get_string(settings, FreeRDP_Username) ? freerdp_settings_get_string(settings, FreeRDP_Username) : "null") +
+           "', domain='" + (freerdp_settings_get_string(settings, FreeRDP_Domain) ? freerdp_settings_get_string(settings, FreeRDP_Domain) : "null") +
+           "', password_len=" + std::to_string(password_.length()) +
+           ", IgnoreCertificate=" + std::to_string(freerdp_settings_get_bool(settings, FreeRDP_IgnoreCertificate) ? 1 : 0) +
+           ", NlaSecurity=" + std::to_string(freerdp_settings_get_bool(settings, FreeRDP_NlaSecurity) ? 1 : 0) +
+           ", TlsSecurity=" + std::to_string(freerdp_settings_get_bool(settings, FreeRDP_TlsSecurity) ? 1 : 0)).c_str());
 
   fileLog("[RDP] RdpSession::connect: calling freerdp_connect");
   BOOL connectResult = freerdp_connect(instance_);
@@ -468,15 +457,13 @@ void RdpSession::disconnect() {
 }
 
 void RdpSession::pump() {
-  fprintf(stderr, "[RDP] pump started, shall_disconnect=%d\n", freerdp_shall_disconnect(instance_));
-  fflush(stderr);
+  fileLog((std::string("[RDP] pump started, shall_disconnect=") + std::to_string(freerdp_shall_disconnect(instance_))).c_str());
   int consecutiveFailures = 0;
   while (running_ && connected_) {
     HANDLE handles[64];
     DWORD ncount = freerdp_get_event_handles(context_, handles, 64);
     if (ncount == 0) {
-      fprintf(stderr, "[RDP] pump: no event handles\n");
-      fflush(stderr);
+      fileLog("[RDP] pump: no event handles");
 #ifdef _WIN32
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
 #endif
@@ -487,9 +474,7 @@ void RdpSession::pump() {
       int shall = freerdp_shall_disconnect(instance_);
       UINT32 err = freerdp_get_last_error(context_);
       const char* errStr = freerdp_get_last_error_string(err);
-      fprintf(stderr, "[RDP] pump: check_event_handles failed, shall_disconnect=%d, last_error=%u (%s)\n",
-              shall, err, errStr ? errStr : "unknown");
-      fflush(stderr);
+      fileLog((std::string("[RDP] pump: check_event_handles failed, shall_disconnect=") + std::to_string(shall) + ", last_error=" + std::to_string(err) + " (" + (errStr ? errStr : "unknown") + ")").c_str());
 
       if (shall) {
         if (listener_) listener_->onDisconnect("RDP server disconnected");
@@ -499,8 +484,7 @@ void RdpSession::pump() {
 
       consecutiveFailures++;
       if (consecutiveFailures > 50) {
-        fprintf(stderr, "[RDP] pump: too many consecutive failures, forcing disconnect\n");
-        fflush(stderr);
+        fileLog("[RDP] pump: too many consecutive failures, forcing disconnect");
         if (listener_) listener_->onDisconnect("RDP pump stalled");
         connected_ = false;
         break;
@@ -510,8 +494,7 @@ void RdpSession::pump() {
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
-  fprintf(stderr, "[RDP] pump exited\n");
-  fflush(stderr);
+  fileLog("[RDP] pump exited");
 }
 
 void RdpSession::sendPointerEvent(int flags, int x, int y) {
