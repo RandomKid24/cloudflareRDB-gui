@@ -518,6 +518,8 @@ RdpSession* RdpSession::getSelf(rdpContext* ctx) {
 }
 
 BOOL RdpSession::beginPaint(rdpContext* ctx) {
+  fprintf(stderr, "[RDP] beginPaint called\n");
+  fflush(stderr);
   return TRUE;
 }
 
@@ -584,12 +586,25 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
 }
 
 BOOL RdpSession::desktopResize(rdpContext* ctx) {
+  fprintf(stderr, "[RDP] desktopResize called\n");
+  fflush(stderr);
   RdpSession* self = getSelf(ctx);
-  if (!self || !self->listener_) return TRUE;
+  if (!self) {
+    fprintf(stderr, "[RDP] desktopResize: self is null\n");
+    fflush(stderr);
+    return TRUE;
+  }
+  if (!self->listener_) {
+    fprintf(stderr, "[RDP] desktopResize: listener is null\n");
+    fflush(stderr);
+    return TRUE;
+  }
 
   rdpSettings* settings = ctx->settings;
   int newW = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
   int newH = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+  fprintf(stderr, "[RDP] desktopResize: new size = %dx%d\n", newW, newH);
+  fflush(stderr);
 
   self->listener_->onResize(newW, newH);
   return TRUE;
