@@ -24,7 +24,7 @@ jobs:
             label: Linux
             artifact_name: linux
             build_command: npm run electron:build:linux -- --publish never
-          - os: windows-latest
+          - os: windows-2022
             label: Windows (native RDP)
             artifact_name: windows
             build_command: npm run electron:build -- --win nsis --publish never
@@ -33,8 +33,6 @@ jobs:
             artifact_name: macos
             build_command: npm run electron:build:mac -- --publish never
 
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,7 +67,6 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          # Build FreeRDP 2.11.7 from source (brew ships 3.x, addon needs 2.x)
           curl -sL https://github.com/FreeRDP/FreeRDP/archive/refs/tags/2.11.7.tar.gz | tar xz
           cd FreeRDP-2.11.7
           cmake -B build \
@@ -78,36 +75,23 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=/usr/local/freerdp2 \
             -DCMAKE_OSX_ARCHITECTURES="arm64" \
             -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-no_fixup_chains" \
-            -DWITH_SERVER=OFF \
-            -DWITH_WAYLAND=OFF \
-            -DWITH_X11=OFF \
-            -DWITH_SDL2=OFF \
-            -DWITH_OPENSSL=ON \
-            -DWITH_ALSA=OFF \
-            -DWITH_PULSE=OFF \
-            -DWITH_CUPS=OFF \
-            -DWITH_PCSC=OFF \
-            -DWITH_FFMPEG=OFF \
-            -DWITH_SWSCALE=OFF \
-            -DWITH_FAAC=OFF \
-            -DWITH_FAAD2=OFF \
-            -DWITH_GSM=OFF \
-            -DWITH_JPEG=OFF \
-            -DWITH_LAME=OFF \
-            -DWITH_OPUS=OFF \
-            -DWITH_SPEEX=OFF \
-            -DWITH_WEBRTC=OFF \
-            -DWITH_CLIENT_MACAQUA=OFF \
-            -DWITH_CLIENT_MAC=OFF \
-            -DWITH_CLIENT_SDL=OFF \
-            -DWITH_CLIENT_X11=OFF \
-            -DWITH_CLIENT_HEADLESS=OFF \
+            -DWITH_SERVER=OFF -DWITH_WAYLAND=OFF -DWITH_X11=OFF \
+            -DWITH_SDL2=OFF -DWITH_OPENSSL=ON -DWITH_ALSA=OFF \
+            -DWITH_PULSE=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF \
+            -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF -DWITH_FAAC=OFF \
+            -DWITH_FAAD2=OFF -DWITH_GSM=OFF -DWITH_JPEG=OFF \
+            -DWITH_LAME=OFF -DWITH_OPUS=OFF -DWITH_SPEEX=OFF \
+            -DWITH_WEBRTC=OFF -DWITH_CLIENT_MACAQUA=OFF \
+            -DWITH_CLIENT_MAC=OFF -DWITH_CLIENT_SDL=OFF \
+            -DWITH_CLIENT_X11=OFF -DWITH_CLIENT_HEADLESS=OFF \
             -DWITH_WINPR_TOOLS=OFF
-          cmake --build build -j$(sysctl -n hw.logicalcpu) --target freerdp --target freerdp-client --target winpr
+          cmake --build build -j$(sysctl -n hw.logicalcpu)
           sudo cmake --install build --prefix /usr/local/freerdp2
-          # Remove the source to save disk space
-          cd .. && rm -rf FreeRDP-2.11.7 build
-          echo "FREERDP_ROOT=/usr/local/freerdp2" >> $GITHUB_ENV
+          cd .. && rm -rf FreeRDP-2.11.7
+          # Export so the native addon build can find headers + libs
+          echo "FREERDP_ROOT=/usr/local/freerdp2"           >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=/usr/local/freerdp2"       >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/local/freerdp2/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
       - name: Install FreeRDP (Windows)
         if: runner.os == 'Windows'
@@ -254,6 +238,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist-artifacts
+          merge-multiple: false
 
       - name: Compute release tag
         id: meta

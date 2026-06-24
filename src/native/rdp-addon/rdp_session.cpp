@@ -539,6 +539,16 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
     return TRUE;
   }
 
+  // Guard the full pointer chain before any dereference.
+  // In headless/addon mode, primary, hdc, hwnd, or invalid can be null
+  // during connection negotiation or after a resolution change.
+  if (!gdi->primary || !gdi->primary->hdc ||
+      !gdi->primary->hdc->hwnd || !gdi->primary->hdc->hwnd->invalid) {
+    fprintf(stderr, "[RDP] endPaint: GDI sub-structure not ready, skipping\n");
+    fflush(stderr);
+    return TRUE;
+  }
+
   HGDI_WND wnd = gdi->primary->hdc->hwnd;
   fprintf(stderr, "[RDP] endPaint: invalid->null=%d\n", wnd->invalid->null);
   fflush(stderr);
@@ -546,18 +556,26 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
   if (wnd->invalid->null)
     return TRUE;
 
-  int x = wnd->invalid->x;
-  int y = wnd->invalid->y;
-  int w = wnd->invalid->w;
-  int h = wnd->invalid->h;
+  INT32 x = wnd->invalid->x;
+  INT32 y = wnd->invalid->y;
+  INT32 w = wnd->invalid->w;
+  INT32 h = wnd->invalid->h;
+
+  // Clamp negative origins into the valid buffer region.
+  // Malformed server updates can send negative x/y.
+  if (x < 0) { w += x; x = 0; }
+  if (y < 0) { h += y; y = 0; }
+
+  // Clamp extents against the actual GDI surface dimensions.
+  if (x + w > (INT32)gdi->width)  w = (INT32)gdi->width  - x;
+  if (y + h > (INT32)gdi->height) h = (INT32)gdi->height - y;
 
   if (w <= 0 || h <= 0) {
     wnd->invalid->null = TRUE;
     return TRUE;
   }
 
-  int fullW = gdi->width;
-  int stride = gdi->stride;
+  int stride = gdi->stride;  // Use gdi->stride — may include alignment padding
   int bpp = 4;
 
   const BYTE* src = gdi->primary_buffer;
@@ -567,9 +585,9 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
     const BYTE* srcRow = src + (y + row) * stride + x * bpp;
     uint8_t* dstRow = rgba.data() + row * w * bpp;
     for (int col = 0; col < w; col++) {
-      dstRow[col * 4 + 0] = srcRow[col * 4 + 2];
-      dstRow[col * 4 + 1] = srcRow[col * 4 + 1];
-      dstRow[col * 4 + 2] = srcRow[col * 4 + 0];
+      dstRow[col * 4 + 0] = srcRow[col * 4 + 2];  // R ← B (BGRX→RGBA)
+      dstRow[col * 4 + 1] = srcRow[col * 4 + 1];  // G ← G
+      dstRow[col * 4 + 2] = srcRow[col * 4 + 0];  // B ← R
       dstRow[col * 4 + 3] = 255;
     }
   }
@@ -588,25 +606,52 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
 BOOL RdpSession::desktopResize(rdpContext* ctx) {
   fprintf(stderr, "[RDP] desktopResize called\n");
   fflush(stderr);
+
   RdpSession* self = getSelf(ctx);
   if (!self) {
     fprintf(stderr, "[RDP] desktopResize: self is null\n");
     fflush(stderr);
-    return TRUE;
-  }
-  if (!self->listener_) {
-    fprintf(stderr, "[RDP] desktopResize: listener is null\n");
-    fflush(stderr);
-    return TRUE;
+    return FALSE;
   }
 
   rdpSettings* settings = ctx->settings;
-  int newW = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
-  int newH = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
-  fprintf(stderr, "[RDP] desktopResize: new size = %dx%d\n", newW, newH);
+  UINT32 newW = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
+  UINT32 newH = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
+  fprintf(stderr, "[RDP] desktopResize: new size = %ux%u\n", newW, newH);
   fflush(stderr);
 
-  self->listener_->onResize(newW, newH);
+  if (newW == 0 || newH == 0) {
+    fprintf(stderr, "[RDP] desktopResize: invalid dimensions, skipping\n");
+    fflush(stderr);
+    return FALSE;
+  }
+
+  // Resize the GDI framebuffer to match the new remote resolution.
+  // Without this, the old buffer remains at the old size and subsequent
+  // endPaint calls with the new coordinates overflow into unmapped memory.
+  // NOTE: gdi_resize() reallocates primary_buffer — do NOT use any pointer
+  // cached before this call after it returns.
+  rdpGdi* gdi = ctx->gdi;
+  if (gdi) {
+    if (!gdi_resize(gdi, newW, newH)) {
+      fprintf(stderr, "[RDP] desktopResize: gdi_resize failed\n");
+      fflush(stderr);
+      return FALSE;
+    }
+    fprintf(stderr, "[RDP] desktopResize: gdi_resize OK, new buffer=%p\n",
+            (void*)gdi->primary_buffer);
+    fflush(stderr);
+  } else {
+    fprintf(stderr, "[RDP] desktopResize: gdi is null, skipping resize\n");
+    fflush(stderr);
+  }
+
+  self->width_  = (int)newW;
+  self->height_ = (int)newH;
+
+  if (self->listener_)
+    self->listener_->onResize((int)newW, (int)newH);
+
   return TRUE;
 }
 
