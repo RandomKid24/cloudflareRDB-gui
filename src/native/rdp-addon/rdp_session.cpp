@@ -231,27 +231,34 @@ RdpSession::~RdpSession() {
 }
 
 BOOL RdpSession::postConnectCallback(freerdp* instance) {
+  fileLog("[RDP] postConnectCallback entered");
   RdpSession* self = getSelf(instance->context);
-  if (!self) return FALSE;
+  if (!self) {
+    fileLog("[RDP] postConnectCallback: self is null!");
+    return FALSE;
+  }
 
-  fprintf(stderr, "[RDP] postConnect called, gdi=%p\n", (void*)instance->context->gdi);
+  fileLog(("[RDP] postConnect called, gdi pointer: " + std::to_string((uintptr_t)instance->context->gdi)).c_str());
 
-  if (gdi_init(instance, PIXEL_FORMAT_BGRX32) != TRUE) {
+  fileLog("[RDP] calling gdi_init...");
+  BOOL gdiInitResult = gdi_init(instance, PIXEL_FORMAT_BGRX32);
+  fileLog(("[RDP] gdi_init result: " + std::to_string(gdiInitResult)).c_str());
+
+  if (gdiInitResult != TRUE) {
     self->lastError_ = "gdi_init failed in PostConnect";
     if (self->listener_) self->listener_->onError(self->lastError_.c_str());
     return FALSE;
   }
 
-  fprintf(stderr, "[RDP] gdi_init OK, primary_buffer=%p\n", (void*)instance->context->gdi->primary_buffer);
+  fileLog(("[RDP] gdi_init OK, primary_buffer pointer: " + std::to_string((uintptr_t)instance->context->gdi->primary_buffer)).c_str());
 
-  fprintf(stderr, "[RDP] registering callbacks via context_->update (%p)\n", (void*)self->context_->update);
+  fileLog(("[RDP] registering callbacks via context_->update: " + std::to_string((uintptr_t)self->context_->update)).c_str());
   self->context_->update->BeginPaint = beginPaint;
   self->context_->update->EndPaint = endPaint;
   self->context_->update->DesktopResize = desktopResize;
-  fprintf(stderr, "[RDP] callbacks set: EndPaint=%p, DesktopResize=%p\n",
-          (void*)self->context_->update->EndPaint,
-          (void*)self->context_->update->DesktopResize);
+  fileLog(("[RDP] callbacks set: EndPaint=" + std::to_string((uintptr_t)self->context_->update->EndPaint) + ", DesktopResize=" + std::to_string((uintptr_t)self->context_->update->DesktopResize)).c_str());
 
+  fileLog("[RDP] postConnectCallback exiting with TRUE");
   return TRUE;
 }
 
@@ -399,7 +406,9 @@ bool RdpSession::connect() {
           freerdp_settings_get_bool(settings, FreeRDP_TlsSecurity) ? 1 : 0);
   fflush(stderr);
 
+  fileLog("[RDP] RdpSession::connect: calling freerdp_connect");
   BOOL connectResult = freerdp_connect(instance_);
+  fileLog(("[RDP] RdpSession::connect: freerdp_connect returned " + std::to_string(connectResult)).c_str());
   if (connectResult != TRUE) {
     UINT32 lastError = freerdp_get_last_error(context_);
     const char* errorStr = freerdp_get_last_error_string(lastError);
@@ -414,6 +423,7 @@ bool RdpSession::connect() {
                actualHost ? actualHost : "null", actualPort);
     }
     lastError_ = buf;
+    fileLog((std::string("[RDP] RdpSession::connect failed error: ") + lastError_).c_str());
     if (listener_) listener_->onError(lastError_.c_str());
     freerdp_context_free(instance_);
     freerdp_free(instance_);
@@ -422,10 +432,12 @@ bool RdpSession::connect() {
     return false;
   }
 
+  fileLog("[RDP] RdpSession::connect: successful connection, starting pump thread");
   connected_ = true;
   running_ = true;
 
   updateThread_ = new std::thread(&RdpSession::pump, this);
+  fileLog("[RDP] RdpSession::connect exiting with true");
 
   return true;
 }
@@ -518,24 +530,22 @@ RdpSession* RdpSession::getSelf(rdpContext* ctx) {
 }
 
 BOOL RdpSession::beginPaint(rdpContext* ctx) {
-  fprintf(stderr, "[RDP] beginPaint called\n");
-  fflush(stderr);
+  fileLog("[RDP] beginPaint called");
   return TRUE;
 }
 
 BOOL RdpSession::endPaint(rdpContext* ctx) {
-  fprintf(stderr, "[RDP] endPaint called\n");
-  fflush(stderr);
+  fileLog("[RDP] endPaint called");
 
   RdpSession* self = getSelf(ctx);
   if (!self || !self->listener_) {
-    fprintf(stderr, "[RDP] endPaint: no self or listener\n");
+    fileLog("[RDP] endPaint: no self or listener");
     return TRUE;
   }
 
   rdpGdi* gdi = ctx->gdi;
   if (!gdi || !gdi->primary_buffer) {
-    fprintf(stderr, "[RDP] endPaint: no gdi or buffer\n");
+    fileLog("[RDP] endPaint: no gdi or buffer");
     return TRUE;
   }
 
@@ -544,14 +554,12 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
   // during connection negotiation or after a resolution change.
   if (!gdi->primary || !gdi->primary->hdc ||
       !gdi->primary->hdc->hwnd || !gdi->primary->hdc->hwnd->invalid) {
-    fprintf(stderr, "[RDP] endPaint: GDI sub-structure not ready, skipping\n");
-    fflush(stderr);
+    fileLog("[RDP] endPaint: GDI sub-structure not ready, skipping");
     return TRUE;
   }
 
   HGDI_WND wnd = gdi->primary->hdc->hwnd;
-  fprintf(stderr, "[RDP] endPaint: invalid->null=%d\n", wnd->invalid->null);
-  fflush(stderr);
+  fileLog(("[RDP] endPaint: invalid->null=" + std::to_string(wnd->invalid->null)).c_str());
 
   if (wnd->invalid->null)
     return TRUE;
@@ -560,6 +568,8 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
   INT32 y = wnd->invalid->y;
   INT32 w = wnd->invalid->w;
   INT32 h = wnd->invalid->h;
+
+  fileLog(("[RDP] endPaint dirty region: x=" + std::to_string(x) + ", y=" + std::to_string(y) + ", w=" + std::to_string(w) + ", h=" + std::to_string(h)).c_str());
 
   // Clamp negative origins into the valid buffer region.
   // Malformed server updates can send negative x/y.
@@ -592,10 +602,9 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
     }
   }
 
+  fileLog("[RDP] endPaint calling onBitmapUpdate listener callback");
   self->listener_->onBitmapUpdate(x, y, w, h, rgba.data(), rgba.size());
-
-  fprintf(stderr, "[RDP] endPaint sent frame: (%d,%d %dx%d)\n", x, y, w, h);
-  fflush(stderr);
+  fileLog("[RDP] endPaint callback successfully sent frame");
 
   wnd->invalid->null = TRUE;
   wnd->ninvalid = 0;
@@ -604,25 +613,21 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
 }
 
 BOOL RdpSession::desktopResize(rdpContext* ctx) {
-  fprintf(stderr, "[RDP] desktopResize called\n");
-  fflush(stderr);
+  fileLog("[RDP] desktopResize called");
 
   RdpSession* self = getSelf(ctx);
   if (!self) {
-    fprintf(stderr, "[RDP] desktopResize: self is null\n");
-    fflush(stderr);
+    fileLog("[RDP] desktopResize: self is null");
     return FALSE;
   }
 
   rdpSettings* settings = ctx->settings;
   UINT32 newW = freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth);
   UINT32 newH = freerdp_settings_get_uint32(settings, FreeRDP_DesktopHeight);
-  fprintf(stderr, "[RDP] desktopResize: new size = %ux%u\n", newW, newH);
-  fflush(stderr);
+  fileLog(("[RDP] desktopResize: new size = " + std::to_string(newW) + "x" + std::to_string(newH)).c_str());
 
   if (newW == 0 || newH == 0) {
-    fprintf(stderr, "[RDP] desktopResize: invalid dimensions, skipping\n");
-    fflush(stderr);
+    fileLog("[RDP] desktopResize: invalid dimensions, skipping");
     return FALSE;
   }
 
@@ -633,24 +638,24 @@ BOOL RdpSession::desktopResize(rdpContext* ctx) {
   // cached before this call after it returns.
   rdpGdi* gdi = ctx->gdi;
   if (gdi) {
+    fileLog("[RDP] calling gdi_resize...");
     if (!gdi_resize(gdi, newW, newH)) {
-      fprintf(stderr, "[RDP] desktopResize: gdi_resize failed\n");
-      fflush(stderr);
+      fileLog("[RDP] desktopResize: gdi_resize failed");
       return FALSE;
     }
-    fprintf(stderr, "[RDP] desktopResize: gdi_resize OK, new buffer=%p\n",
-            (void*)gdi->primary_buffer);
-    fflush(stderr);
+    fileLog(("[RDP] desktopResize: gdi_resize OK, new primary_buffer=" + std::to_string((uintptr_t)gdi->primary_buffer)).c_str());
   } else {
-    fprintf(stderr, "[RDP] desktopResize: gdi is null, skipping resize\n");
-    fflush(stderr);
+    fileLog("[RDP] desktopResize: gdi is null, skipping resize");
   }
 
   self->width_  = (int)newW;
   self->height_ = (int)newH;
 
-  if (self->listener_)
+  if (self->listener_) {
+    fileLog("[RDP] calling onResize listener callback");
     self->listener_->onResize((int)newW, (int)newH);
+    fileLog("[RDP] onResize callback successful");
+  }
 
   return TRUE;
 }
