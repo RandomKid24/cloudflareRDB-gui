@@ -6,6 +6,14 @@ import { registerIpcHandlers, sendStatusToRenderer, sendLogToRenderer } from './
 import { writeLog } from './logger';
 import { getSettings, getTunnels, store } from './store';
 
+process.on('uncaughtException', (error) => {
+  writeLog('system', 'System', 'error', `Uncaught Exception: ${error.message}\n${error.stack || ''}`);
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  writeLog('system', 'System', 'error', `Unhandled Rejection: ${reason?.message || reason}\n${reason?.stack || ''}`);
+});
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let tunnelManager: TunnelManager | null = null;
