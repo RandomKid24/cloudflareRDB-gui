@@ -7,8 +7,12 @@
 #include <winpr/sspi.h>
 #include <thread>
 #include <chrono>
+#include <mutex>
+static std::mutex s_logMutex;
+
 static void fileLog(const char* msg) {
 #ifdef _WIN32
+  std::lock_guard<std::mutex> lock(s_logMutex);
   FILE* f = fopen("C:\\Users\\Ady\\Desktop\\cloudflareRDB-gui\\addon-debug.log", "a");
   if (f) {
     fprintf(f, "%s\n", msg);
@@ -457,7 +461,7 @@ void RdpSession::disconnect() {
 }
 
 void RdpSession::pump() {
-  fileLog((std::string("[RDP] pump started, shall_disconnect=") + std::to_string(freerdp_shall_disconnect(instance_))).c_str());
+  fileLog("[RDP] pump started");
   int consecutiveFailures = 0;
   while (running_ && connected_) {
     HANDLE handles[64];
@@ -471,7 +475,7 @@ void RdpSession::pump() {
     }
 
     if (!freerdp_check_event_handles(context_)) {
-      int shall = freerdp_shall_disconnect(instance_);
+      int shall = freerdp_shall_disconnect_context(context_);
       UINT32 err = freerdp_get_last_error(context_);
       const char* errStr = freerdp_get_last_error_string(err);
       fileLog((std::string("[RDP] pump: check_event_handles failed, shall_disconnect=") + std::to_string(shall) + ", last_error=" + std::to_string(err) + " (" + (errStr ? errStr : "unknown") + ")").c_str());
