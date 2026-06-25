@@ -25,23 +25,6 @@ static void fileLog(const char* msg) {
   fflush(stderr);
 }
 
-#ifdef _WIN32
-#include <windows.h>
-#include <openssl/provider.h>
-#include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/rand.h>
-
-// Strip \\?\ prefix from Windows extended-length paths
-static std::string normalizePath(const std::string& path) {
-  if (path.size() >= 4 && path[0] == '\\' && path[1] == '\\' && path[2] == '?' && path[3] == '\\') {
-    return path.substr(4);
-  }
-  return path;
-}
-
-
-
 static DWORD verifyCertificateCallback(freerdp* instance, const char* common_name,
                                        const char* subject, const char* issuer,
                                        const char* fingerprint, BOOL host_mismatch) {
