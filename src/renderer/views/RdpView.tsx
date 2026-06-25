@@ -212,7 +212,7 @@ export function RdpView({ tunnel, onBack }: Props) {
     setUpdatingPassword(true);
     setUpdateError('');
     try {
-      await window.cloudflareRdp.rdp.updatePassword(tunnel.id, newPassword.trim());
+      await window.cloudflareRdp.rdp.updatePassword(tunnel.id, newPassword.trim(), canvasWidth, canvasHeight);
       setPasswordUpdateRequired(false);
       setNewPassword('');
       setStatus('connected');

@@ -11,17 +11,18 @@
 static std::mutex s_logMutex;
 
 static void fileLog(const char* msg) {
+#if defined(DEBUG) || defined(_DEBUG)
 #ifdef _WIN32
   std::lock_guard<std::mutex> lock(s_logMutex);
-  FILE* f = fopen("C:\\Users\\Ady\\Desktop\\cloudflareRDB-gui\\addon-debug.log", "a");
+  FILE* f = fopen("addon-debug.log", "a");
   if (f) {
     fprintf(f, "%s\n", msg);
     fclose(f);
   }
-#else
+#endif
+#endif
   fprintf(stderr, "%s\n", msg);
   fflush(stderr);
-#endif
 }
 
 #ifdef _WIN32

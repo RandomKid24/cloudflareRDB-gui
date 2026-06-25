@@ -108,8 +108,8 @@ const api = {
       return () => { ipcRenderer.removeListener(IPC_CHANNELS.RDP_VIEW_EVENT, handler); };
     },
 
-    updatePassword: (tunnelId: string, newPassword: string): Promise<boolean> =>
-      ipcRenderer.invoke(IPC_CHANNELS.RDP_VIEW_UPDATE_PASSWORD, tunnelId, newPassword),
+    updatePassword: (tunnelId: string, newPassword: string, width?: number, height?: number): Promise<boolean> =>
+      ipcRenderer.invoke(IPC_CHANNELS.RDP_VIEW_UPDATE_PASSWORD, tunnelId, newPassword, width, height),
   },
 };
 

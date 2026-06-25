@@ -12,8 +12,8 @@ extraResources:
     to: resources/
     filter:
       - "cloudflared*"
-  - from: native/
-    to: native/
+  - from: native/rdp-addon/build/Release/
+    to: native/rdp-addon/build/Release/
     filter:
       - "**/*"
 win:

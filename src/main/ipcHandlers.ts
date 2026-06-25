@@ -188,7 +188,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
     return true;
   });
 
-  ipcMain.handle(IPC_CHANNELS.RDP_VIEW_UPDATE_PASSWORD, async (_event, tunnelId: string, newPassword: string) => {
+  ipcMain.handle(IPC_CHANNELS.RDP_VIEW_UPDATE_PASSWORD, async (_event, tunnelId: string, newPassword: string, width?: number, height?: number) => {
     if (!rdpViewManager) throw new Error('RDP view manager not initialized');
 
     const tunnels = getTunnels();
@@ -207,7 +207,7 @@ export function registerIpcHandlers(tunnelManager: TunnelManager, rdpViewManager
     }
 
     rdpViewManager.disconnectView(tunnelId);
-    await rdpViewManager.connectView(tunnelId, port, config.username, newPassword, config.hostname);
+    await rdpViewManager.connectView(tunnelId, port, config.username, newPassword, config.hostname, width, height);
     return true;
   });
 

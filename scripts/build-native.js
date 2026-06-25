@@ -342,6 +342,21 @@ if (isWin) {
   ].join('\n');
   fs.writeFileSync(path.join(addonOutDir, 'openssl.cnf'), opensslCnf, 'utf-8');
   console.log('  Wrote openssl.cnf');
+
+  // Copy all FreeRDP DLLs from vcpkg to the build output directories (both src/native and native)
+  const vcpkgRoot = process.env.VCPKG_INSTALLATION_ROOT || 'C:\\vcpkg';
+  const vcpkgBin = path.join(vcpkgRoot, 'installed', 'x64-windows', 'bin');
+  if (fs.existsSync(vcpkgBin)) {
+    const outDir = path.join(__dirname, '..', 'src', 'native', 'rdp-addon', 'build', 'Release');
+    fs.mkdirSync(outDir, { recursive: true });
+    fs.mkdirSync(addonOutDir, { recursive: true });
+    const dlls = fs.readdirSync(vcpkgBin).filter(f => f.endsWith('.dll'));
+    for (const dll of dlls) {
+      fs.copyFileSync(path.join(vcpkgBin, dll), path.join(outDir, dll));
+      fs.copyFileSync(path.join(vcpkgBin, dll), path.join(addonOutDir, dll));
+    }
+    console.log(`Copied ${dlls.length} FreeRDP DLLs to build output directories`);
+  }
 }
 
 if (isMac) {
