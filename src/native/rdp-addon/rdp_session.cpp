@@ -267,6 +267,26 @@ BOOL RdpSession::postConnectCallback(freerdp* instance) {
   return TRUE;
 }
 
+// Plain helper with NO C++ objects on its stack frame.
+// MSVC C2712: __try/__except cannot appear in a function that has C++ objects
+// requiring unwinding (std::string, std::vector, etc.).  By isolating freerdp_connect
+// here, we satisfy the compiler and can safely catch the SEH 0xC0000005 access
+// violation that FreeRDP's licensing/RC4 path can raise.
+// Returns:  TRUE  - connected OK
+//           FALSE - freerdp_connect returned FALSE (normal error)
+//           -1    - SEH exception was caught
+static int rdp_connect_seh(freerdp* instance) {
+#ifdef _WIN32
+  __try {
+    return (int)freerdp_connect(instance);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    return -1;
+  }
+#else
+  return (int)freerdp_connect(instance);
+#endif
+}
+
 bool RdpSession::connect() {
 #ifdef _WIN32
   ensureLegacyProvider();
@@ -375,6 +395,11 @@ bool RdpSession::connect() {
   // Keep ignoring cert since we're going over a loopback tunnel
   freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
 
+  // Skip the RC4-based RDP license exchange entirely.
+  // FreeRDP_ServerLicenseRequired = FALSE tells FreeRDP not to perform the license
+  // handshake, so winpr_RC4_New is never called and the null-deref crash cannot fire.
+  freerdp_settings_set_bool(settings, FreeRDP_ServerLicenseRequired, FALSE);
+
   freerdp_settings_set_bool(settings, FreeRDP_Authentication, TRUE);
 
   freerdp_settings_set_bool(settings, FreeRDP_NSCodec, TRUE);
@@ -405,8 +430,29 @@ bool RdpSession::connect() {
            ", TlsSecurity=" + std::to_string(freerdp_settings_get_bool(settings, FreeRDP_TlsSecurity) ? 1 : 0)).c_str());
 
   fileLog("[RDP] RdpSession::connect: calling freerdp_connect");
-  BOOL connectResult = freerdp_connect(instance_);
+
+  // rdp_connect_seh() is a plain C-linkage helper with no C++ objects on its stack.
+  // This is required because MSVC (C2712) forbids __try/__except in any function that
+  // has C++ objects that require unwinding (e.g. std::string, std::vector).  By moving
+  // the freerdp_connect call into a separate frame we can safely catch the SEH
+  // 0xC0000005 access violation that FreeRDP can raise during license negotiation.
+  BOOL connectResult = rdp_connect_seh(instance_);
+
   fileLog(("[RDP] RdpSession::connect: freerdp_connect returned " + std::to_string(connectResult)).c_str());
+  if (connectResult == -1) {
+    // SEH exception was caught inside rdp_connect_seh
+    char sehBuf[256];
+    snprintf(sehBuf, sizeof(sehBuf),
+             "freerdp_connect raised an access violation (SEH) [host='%s' port=%u]",
+             actualHost ? actualHost : "null", actualPort);
+    fileLog((std::string("[RDP] CAUGHT SEH: ") + sehBuf).c_str());
+    lastError_ = sehBuf;
+    if (listener_) listener_->onError(lastError_.c_str());
+    // Do NOT call freerdp_context_free / freerdp_free — the heap may be corrupt.
+    instance_ = nullptr;
+    context_ = nullptr;
+    return false;
+  }
   if (connectResult != TRUE) {
     UINT32 lastError = freerdp_get_last_error(context_);
     const char* errorStr = freerdp_get_last_error_string(lastError);
