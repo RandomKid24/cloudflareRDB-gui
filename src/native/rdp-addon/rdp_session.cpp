@@ -475,7 +475,11 @@ void RdpSession::pump() {
     }
 
     if (!freerdp_check_event_handles(context_)) {
+#if defined(FREERDP_VERSION_MAJOR) && (FREERDP_VERSION_MAJOR >= 3)
       int shall = freerdp_shall_disconnect_context(context_);
+#else
+      int shall = freerdp_shall_disconnect(instance_);
+#endif
       UINT32 err = freerdp_get_last_error(context_);
       const char* errStr = freerdp_get_last_error_string(err);
       fileLog((std::string("[RDP] pump: check_event_handles failed, shall_disconnect=") + std::to_string(shall) + ", last_error=" + std::to_string(err) + " (" + (errStr ? errStr : "unknown") + ")").c_str());
