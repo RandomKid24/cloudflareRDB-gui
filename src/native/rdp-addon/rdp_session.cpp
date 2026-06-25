@@ -395,10 +395,13 @@ bool RdpSession::connect() {
   // Keep ignoring cert since we're going over a loopback tunnel
   freerdp_settings_set_bool(settings, FreeRDP_IgnoreCertificate, TRUE);
 
+#if defined(FREERDP_VERSION_MAJOR) && FREERDP_VERSION_MAJOR >= 3
   // Skip the RC4-based RDP license exchange entirely.
   // FreeRDP_ServerLicenseRequired = FALSE tells FreeRDP not to perform the license
   // handshake, so winpr_RC4_New is never called and the null-deref crash cannot fire.
+  // FreeRDP 2.x uses a different licensing path and doesn't have this constant.
   freerdp_settings_set_bool(settings, FreeRDP_ServerLicenseRequired, FALSE);
+#endif
 
   freerdp_settings_set_bool(settings, FreeRDP_Authentication, TRUE);
 
