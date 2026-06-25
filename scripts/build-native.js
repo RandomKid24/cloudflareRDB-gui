@@ -536,4 +536,38 @@ if (!isWin && !isMac) {
   }
 }
 
+// Copy build outputs to local development Electron resources directory to prevent dev fallback crashes
+function copyFolderSync(from, to) {
+  fs.mkdirSync(to, { recursive: true });
+  fs.readdirSync(from).forEach(element => {
+    const fromPath = path.join(from, element);
+    const toPath = path.join(to, element);
+    const stat = fs.lstatSync(fromPath);
+    if (stat.isFile()) {
+      fs.copyFileSync(fromPath, toPath);
+    } else if (stat.isDirectory()) {
+      copyFolderSync(fromPath, toPath);
+    }
+  });
+}
+
+let devElectronResources = null;
+if (isWin) {
+  devElectronResources = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'resources');
+} else if (isMac) {
+  devElectronResources = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'Electron.app', 'Contents', 'Resources');
+} else {
+  devElectronResources = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'resources');
+}
+
+if (devElectronResources && fs.existsSync(devElectronResources)) {
+  const devAddonDest = path.join(devElectronResources, 'native', 'rdp-addon', 'build', 'Release');
+  try {
+    copyFolderSync(addonOutDir, devAddonDest);
+    console.log(`Successfully synced native addon and DLLs to development electron resources: ${devAddonDest}`);
+  } catch (err) {
+    console.warn(`Warning: failed to sync to dev electron resources: ${err.message}`);
+  }
+}
+
 console.log('Native addon build complete.');
