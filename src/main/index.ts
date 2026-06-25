@@ -1,10 +1,53 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, screen } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { TunnelManager } from './tunnelManager';
 import { RdpViewManager } from './rdpViewManager';
 import { registerIpcHandlers, sendStatusToRenderer, sendLogToRenderer } from './ipcHandlers';
 import { writeLog } from './logger';
 import { getSettings, getTunnels, store } from './store';
+
+function initOpenSSLEnv() {
+  if (process.platform !== 'win32') return;
+
+  let addonDir = path.join(__dirname, '..', '..', 'native', 'rdp-addon', 'build', 'Release');
+  if (!fs.existsSync(path.join(addonDir, 'rdp_addon.node'))) {
+    addonDir = path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release');
+  }
+
+  process.env.PATH = `${addonDir};${process.env.PATH}`;
+
+  const osslModulesDir = path.join(addonDir, 'ossl-modules');
+  process.env.OPENSSL_MODULES = osslModulesDir;
+
+  const opensslCnfPath = path.join(addonDir, 'openssl.cnf');
+  if (!fs.existsSync(opensslCnfPath)) {
+    try {
+      fs.mkdirSync(addonDir, { recursive: true });
+      fs.writeFileSync(opensslCnfPath, [
+        'openssl_conf = openssl_init',
+        '',
+        '[openssl_init]',
+        'providers = provider_sect',
+        '',
+        '[provider_sect]',
+        'default = default_sect',
+        'legacy = legacy_sect',
+        '',
+        '[default_sect]',
+        'activate = 1',
+        '',
+        '[legacy_sect]',
+        'activate = 1',
+        '',
+      ].join('\n'), 'utf-8');
+    } catch {}
+  }
+  process.env.OPENSSL_CONF = opensslCnfPath;
+}
+
+initOpenSSLEnv();
+
 
 process.on('uncaughtException', (error) => {
   writeLog('system', 'System', 'error', `Uncaught Exception: ${error.message}\n${error.stack || ''}`);

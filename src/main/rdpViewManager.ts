@@ -62,30 +62,6 @@ export class RdpViewManager {
           );
         }
 
-        const osslModulesDir = path.join(addonDir, 'ossl-modules');
-        process.env.OPENSSL_MODULES = osslModulesDir;
-
-        const opensslCnfPath = path.join(addonDir, 'openssl.cnf');
-        if (!fs.existsSync(opensslCnfPath)) {
-          fs.writeFileSync(opensslCnfPath, [
-            'openssl_conf = openssl_init',
-            '',
-            '[openssl_init]',
-            'providers = provider_sect',
-            '',
-            '[provider_sect]',
-            'default = default_sect',
-            'legacy = legacy_sect',
-            '',
-            '[default_sect]',
-            'activate = 1',
-            '',
-            '[legacy_sect]',
-            'activate = 1',
-            '',
-          ].join('\n'), 'utf-8');
-        }
-        process.env.OPENSSL_CONF = opensslCnfPath;
       }
 
       if (isLinux) {
