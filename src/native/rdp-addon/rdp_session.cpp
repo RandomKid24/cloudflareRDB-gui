@@ -40,156 +40,7 @@ static std::string normalizePath(const std::string& path) {
   return path;
 }
 
-static void logOpenSSLErrors() {
-  unsigned long err;
-  while ((err = ERR_get_error()) != 0) {
-    char buf[256];
-    ERR_error_string_n(err, buf, sizeof(buf));
-    fileLog((std::string("OpenSSL error: ") + buf).c_str());
-  }
-}
 
-// Global initializer that sets env vars at DLL load time.
-// Uses _putenv_s so the shared CRT cache is updated for FreeRDP.
-struct EnvVarInitializer {
-  EnvVarInitializer() {
-    HMODULE hMod = GetModuleHandleA("rdp_addon.node");
-    if (!hMod) return;
-
-    char dllPath[MAX_PATH];
-    if (!GetModuleFileNameA(hMod, dllPath, MAX_PATH)) return;
-
-    std::string dir(dllPath);
-    auto pos = dir.find_last_of('\\');
-    if (pos == std::string::npos) return;
-    dir = normalizePath(dir.substr(0, pos));
-
-    // _putenv_s updates BOTH the CRT cache AND the OS environment block.
-    // Since we now use /MD (dynamic CRT), this shares the CRT cache with FreeRDP.
-    _putenv_s("OPENSSL_MODULES", dir.c_str());
-
-    // Also ensure openssl.cnf exists to auto-load legacy provider
-    std::string cnfPath = dir + "\\openssl.cnf";
-    WIN32_FIND_DATAA cnfFind;
-    HANDLE hCnf = FindFirstFileA(cnfPath.c_str(), &cnfFind);
-    if (hCnf == INVALID_HANDLE_VALUE) {
-      FILE* f = fopen(cnfPath.c_str(), "w");
-      if (f) {
-        fprintf(f, "openssl_conf = openssl_init\n\n[openssl_init]\nproviders = provider_sect\n\n[provider_sect]\ndefault = default_sect\nlegacy = legacy_sect\n\n[default_sect]\nactivate = 1\n\n[legacy_sect]\nactivate = 1\n\n");
-        fclose(f);
-      }
-    } else {
-      FindClose(hCnf);
-    }
-    _putenv_s("OPENSSL_CONF", cnfPath.c_str());
-  }
-};
-static EnvVarInitializer s_envInit;
-
-static void ensureLegacyProvider() {
-  HMODULE hMod = NULL;
-  if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                          (LPCSTR)&ensureLegacyProvider, &hMod)) {
-    return;
-  }
-
-  char dllPath[MAX_PATH];
-  if (!GetModuleFileNameA(hMod, dllPath, MAX_PATH)) {
-    return;
-  }
-
-  std::string dir(dllPath);
-  auto pos = dir.find_last_of('\\');
-  if (pos == std::string::npos) return;
-  dir = normalizePath(dir.substr(0, pos));
-
-  // Check OPENSSL_MODULES env var
-  char* modulesDir = getenv("OPENSSL_MODULES");
-  fileLog((std::string("ensureLegacyProvider: OPENSSL_MODULES=") + (modulesDir ? modulesDir : "NULL")).c_str());
-
-  // Check OPENSSL_CONF env var
-  char* confPath = getenv("OPENSSL_CONF");
-  fileLog((std::string("ensureLegacyProvider: OPENSSL_CONF=") + (confPath ? confPath : "NULL")).c_str());
-
-  // Load the legacy provider
-  OSSL_PROVIDER* legacy = OSSL_PROVIDER_load(NULL, "legacy");
-  if (legacy) {
-    fileLog("ensureLegacyProvider: LEGACY loaded OK");
-  } else {
-    fileLog("ensureLegacyProvider: LEGACY FAILED");
-    logOpenSSLErrors();
-  }
-
-  // Explicitly load default provider
-  OSSL_PROVIDER* def = OSSL_PROVIDER_load(NULL, "default");
-  if (def) {
-    fileLog("ensureLegacyProvider: DEFAULT loaded OK");
-  } else {
-    fileLog("ensureLegacyProvider: DEFAULT FAILED");
-    logOpenSSLErrors();
-  }
-
-  // Check which providers are loaded
-  OSSL_PROVIDER* prov = OSSL_PROVIDER_load(NULL, "legacy");
-  if (prov) {
-    fileLog("ensureLegacyProvider: LEGACY (2nd attempt) loaded OK");
-  } else {
-    fileLog("ensureLegacyProvider: LEGACY (2nd attempt) FAILED");
-    logOpenSSLErrors();
-    ERR_clear_error();
-  }
-
-  // Now mimic EXACTLY what WinPR does in winpr_RC4_New_Internal
-  const EVP_CIPHER* evp = EVP_rc4();
-  fileLog((std::string("ensureLegacyProvider: EVP_rc4()=") + (evp ? "AVAILABLE" : "NULL")).c_str());
-
-  if (evp) {
-    // Step 1: EVP_CIPHER_CTX_new
-    EVP_CIPHER_CTX* wctx = EVP_CIPHER_CTX_new();
-    if (!wctx) {
-      fileLog("ensureLegacyProvider: FAIL at EVP_CIPHER_CTX_new");
-    } else {
-      // Step 2: EVP_EncryptInit_ex with NULL key (just set cipher)
-      EVP_CIPHER_CTX_reset(wctx);
-      if (EVP_EncryptInit_ex(wctx, evp, NULL, NULL, NULL) != 1) {
-        fileLog("ensureLegacyProvider: FAIL at EVP_EncryptInit_ex(NULL key)");
-        logOpenSSLErrors();
-      } else {
-        fileLog("ensureLegacyProvider: EVP_EncryptInit_ex(NULL key) OK");
-        // Step 3: Set FIPS flag
-        EVP_CIPHER_CTX_set_flags(wctx, EVP_CIPH_FLAG_NON_FIPS_ALLOW);
-        // Step 4: Set key length
-        if (EVP_CIPHER_CTX_set_key_length(wctx, 16) != 1) {
-          fileLog("ensureLegacyProvider: FAIL at EVP_CIPHER_CTX_set_key_length");
-          logOpenSSLErrors();
-        } else {
-          fileLog("ensureLegacyProvider: EVP_CIPHER_CTX_set_key_length OK");
-          // Step 5: Final EVP_EncryptInit_ex with actual key
-          unsigned char testKey[16] = {0};
-          if (EVP_EncryptInit_ex(wctx, NULL, NULL, testKey, NULL) != 1) {
-            fileLog("ensureLegacyProvider: FAIL at EVP_EncryptInit_ex(key)");
-            logOpenSSLErrors();
-          } else {
-            fileLog("ensureLegacyProvider: FULL WinPR RC4 INIT SEQUENCE OK");
-          }
-        }
-      }
-      EVP_CIPHER_CTX_free(wctx);
-    }
-  } else {
-    // Try loading with explicit module path
-    fileLog("ensureLegacyProvider: Trying OSSL_PROVIDER_load with path...");
-    OSSL_PROVIDER* prov_path = OSSL_PROVIDER_load(NULL, (dir + "\\legacy.dll").c_str());
-    if (prov_path) {
-      fileLog("ensureLegacyProvider: LEGACY loaded via path OK");
-    } else {
-      fileLog("ensureLegacyProvider: LEGACY via path FAILED");
-      logOpenSSLErrors();
-    }
-  }
-}
-#endif
 
 static DWORD verifyCertificateCallback(freerdp* instance, const char* common_name,
                                        const char* subject, const char* issuer,
@@ -288,18 +139,6 @@ static int rdp_connect_seh(freerdp* instance) {
 }
 
 bool RdpSession::connect() {
-#ifdef _WIN32
-  ensureLegacyProvider();
-#endif
-
-  // FreeRDP 3.x: sspi_GlobalInit() must be called once before any SSPI operation.
-  // It populates NEGOTIATE_SecPkgInfoW_NameBuffer (and similar buffers) via
-  // InitializeConstWCharFromUtf8. Without this, QuerySecurityPackageInfo("Negotiate")
-  // does _wcscmp(L"Negotiate", L"") and returns SEC_E_SECPKG_NOT_FOUND, which
-  // manifests as the "packageName=N" / ERRCONNECT_AUTHENTICATION_FAILED error.
-  // This call is idempotent — safe to call multiple times.
-  sspi_GlobalInit();
-  fileLog("[RDP] sspi_GlobalInit() called successfully");
   instance_ = freerdp_new();
   if (!instance_) {
     lastError_ = "freerdp_new failed";
@@ -404,6 +243,7 @@ bool RdpSession::connect() {
 #endif
 
   freerdp_settings_set_bool(settings, FreeRDP_Authentication, TRUE);
+  freerdp_settings_set_bool(settings, FreeRDP_DisableCredentialsDelegation, TRUE);
 
   freerdp_settings_set_bool(settings, FreeRDP_NSCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
