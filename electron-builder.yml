@@ -1,5 +1,6 @@
 appId: com.tunnelgate.app
 productName: TunnelGate
+npmRebuild: false
 directories:
   output: release
   buildResources: resources

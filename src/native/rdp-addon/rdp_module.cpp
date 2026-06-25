@@ -33,40 +33,56 @@ public:
   }
 
   void onBitmapUpdate(int x, int y, int w, int h, const void* data, size_t size) override {
-    auto copy = std::make_shared<std::vector<uint8_t>>(
-      static_cast<const uint8_t*>(data),
-      static_cast<const uint8_t*>(data) + size);
+    try {
+      auto copy = std::make_shared<std::vector<uint8_t>>(
+        static_cast<const uint8_t*>(data),
+        static_cast<const uint8_t*>(data) + size);
 
-    bitmapCb_.BlockingCall([x, y, w, h, copy](Napi::Env env, Napi::Function jsCallback) {
-      auto buf = Napi::Buffer<uint8_t>::Copy(env, copy->data(), copy->size());
-      jsCallback.Call({
-        Napi::Number::New(env, x),
-        Napi::Number::New(env, y),
-        Napi::Number::New(env, w),
-        Napi::Number::New(env, h),
-        buf,
+      bitmapCb_.BlockingCall([x, y, w, h, copy](Napi::Env env, Napi::Function jsCallback) {
+        try {
+          auto buf = Napi::Buffer<uint8_t>::Copy(env, copy->data(), copy->size());
+          jsCallback.Call({
+            Napi::Number::New(env, x),
+            Napi::Number::New(env, y),
+            Napi::Number::New(env, w),
+            Napi::Number::New(env, h),
+            buf,
+          });
+        } catch (...) {}
       });
-    });
+    } catch (...) {}
   }
 
   void onResize(int w, int h) override {
-    resizeCb_.BlockingCall([w, h](Napi::Env env, Napi::Function jsCallback) {
-      jsCallback.Call({ Napi::String::New(env, "resize"), Napi::Number::New(env, w), Napi::Number::New(env, h) });
-    });
+    try {
+      resizeCb_.BlockingCall([w, h](Napi::Env env, Napi::Function jsCallback) {
+        try {
+          jsCallback.Call({ Napi::String::New(env, "resize"), Napi::Number::New(env, w), Napi::Number::New(env, h) });
+        } catch (...) {}
+      });
+    } catch (...) {}
   }
 
   void onDisconnect(const char* reason) override {
-    std::string r(reason);
-    disconnectCb_.BlockingCall([r](Napi::Env env, Napi::Function jsCallback) {
-      jsCallback.Call({ Napi::String::New(env, "disconnected"), Napi::String::New(env, r) });
-    });
+    try {
+      std::string r(reason);
+      disconnectCb_.BlockingCall([r](Napi::Env env, Napi::Function jsCallback) {
+        try {
+          jsCallback.Call({ Napi::String::New(env, "disconnected"), Napi::String::New(env, r) });
+        } catch (...) {}
+      });
+    } catch (...) {}
   }
 
   void onError(const char* msg) override {
-    std::string m(msg);
-    errorCb_.BlockingCall([m](Napi::Env env, Napi::Function jsCallback) {
-      jsCallback.Call({ Napi::String::New(env, "error"), Napi::String::New(env, m) });
-    });
+    try {
+      std::string m(msg);
+      errorCb_.BlockingCall([m](Napi::Env env, Napi::Function jsCallback) {
+        try {
+          jsCallback.Call({ Napi::String::New(env, "error"), Napi::String::New(env, m) });
+        } catch (...) {}
+      });
+    } catch (...) {}
   }
 
 private:

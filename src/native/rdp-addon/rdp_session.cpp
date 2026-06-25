@@ -598,9 +598,15 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
     }
   }
 
-  fileLog("[RDP] endPaint calling onBitmapUpdate listener callback");
-  self->listener_->onBitmapUpdate(x, y, w, h, rgba.data(), rgba.size());
-  fileLog("[RDP] endPaint callback successfully sent frame");
+  try {
+    fileLog("[RDP] endPaint calling onBitmapUpdate listener callback");
+    self->listener_->onBitmapUpdate(x, y, w, h, rgba.data(), rgba.size());
+    fileLog("[RDP] endPaint callback successfully sent frame");
+  } catch (const std::exception& e) {
+    fileLog((std::string("[RDP] endPaint: caught exception: ") + e.what()).c_str());
+  } catch (...) {
+    fileLog("[RDP] endPaint: caught unknown exception");
+  }
 
   wnd->invalid->null = TRUE;
   wnd->ninvalid = 0;
