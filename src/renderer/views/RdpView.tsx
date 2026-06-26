@@ -63,10 +63,33 @@ export function RdpView({ tunnel, onBack }: Props) {
   const [showPasswordExpired, setShowPasswordExpired] = useState(false);
   const [canvasWidth, setCanvasWidth] = useState(DEFAULT_WIDTH);
   const [canvasHeight, setCanvasHeight] = useState(DEFAULT_HEIGHT);
+  const [connectingStep, setConnectingStep] = useState('Initializing secure tunnel...');
   const active = tunnel?.runtime.status === 'connected';
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const connectSizeRef = useRef({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
   const connectedRef = useRef(false);
+
+  useEffect(() => {
+    if (status !== 'connecting') return;
+    const steps = [
+      'Initializing secure tunnel...',
+      'Connecting to RDP gate...',
+      'Negotiating RDP protocols...',
+      'Establishing SSL/TLS session...',
+      'Performing NLA security handshake...',
+      'Authenticating credentials...',
+      'Setting up graphics pipeline...',
+    ];
+    let index = 0;
+    setConnectingStep(steps[0]);
+    const interval = setInterval(() => {
+      index++;
+      if (index < steps.length) {
+        setConnectingStep(steps[index]);
+      }
+    }, 450);
+    return () => clearInterval(interval);
+  }, [status]);
 
   // Track canvas wrapper size for dynamic RDP resolution
   // connectSizeRef is used for the initial RDP connect (no reconnect on resize)
@@ -78,10 +101,11 @@ export function RdpView({ tunnel, onBack }: Props) {
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { inlineSize, blockSize } = entry.borderBoxSize?.[0] ?? entry.contentBoxSize?.[0] ?? { inlineSize: DEFAULT_WIDTH, blockSize: DEFAULT_HEIGHT };
-        const rawW = Math.max(640, Math.min(2560, Math.round(inlineSize)));
-        let rawH = Math.max(480, Math.min(1440, Math.round(blockSize)));
+        const dpr = 1; // Temporarily lock to 1.0 to reduce tunnel bandwidth until native code is recompiled
+        const rawW = Math.max(640, Math.min(3840, Math.round(inlineSize * dpr)));
+        let rawH = Math.max(480, Math.min(2160, Math.round(blockSize * dpr)));
         if (toolbarEl) {
-          rawH = Math.max(480, Math.min(1440, rawH - toolbarEl.offsetHeight));
+          rawH = Math.max(480, Math.min(2160, rawH - Math.round(toolbarEl.offsetHeight * dpr)));
         }
         const snapped = getBestRdpSize(rawW, rawH);
         console.log('Container measured:', rawW, rawH, '→ RDP:', snapped.width, snapped.height);
@@ -462,7 +486,7 @@ export function RdpView({ tunnel, onBack }: Props) {
           flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: 'rgba(255,255,255,0.5)', fontSize: 14,
         }}>
-          Connecting to RDP session...
+          {connectingStep}
         </div>
       )}
 

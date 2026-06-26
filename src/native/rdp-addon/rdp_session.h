@@ -53,6 +53,7 @@ private:
   std::atomic<bool> connected_{false};
   std::atomic<bool> running_{false};
   RdpFrameListener* listener_ = nullptr;
+  std::vector<uint8_t> frameBuffer_;
 
   std::string lastError_;
   std::string host_;

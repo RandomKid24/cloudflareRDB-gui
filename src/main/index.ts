@@ -15,11 +15,6 @@ function initOpenSSLEnv() {
     addonDir = path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release');
   }
 
-  process.env.PATH = `${addonDir};${process.env.PATH}`;
-
-  const osslModulesDir = path.join(addonDir, 'ossl-modules');
-  process.env.OPENSSL_MODULES = osslModulesDir;
-
   const opensslCnfPath = path.join(addonDir, 'openssl.cnf');
   if (!fs.existsSync(opensslCnfPath)) {
     try {
@@ -43,7 +38,36 @@ function initOpenSSLEnv() {
       ].join('\n'), 'utf-8');
     } catch {}
   }
-  process.env.OPENSSL_CONF = opensslCnfPath;
+
+  // Suffix/prefix matching to check if environmental variables are already cached in CRT block
+  const isEnvSet = 
+    process.env.OPENSSL_CONF === opensslCnfPath &&
+    process.env.OPENSSL_MODULES === addonDir &&
+    process.env.PATH?.split(';').includes(addonDir);
+
+  if (!isEnvSet) {
+    process.env.PATH = `${addonDir};${process.env.PATH}`;
+    process.env.OPENSSL_MODULES = addonDir;
+    process.env.OPENSSL_CONF = opensslCnfPath;
+
+    if (app.isPackaged) {
+      // In production, relaunch and exit immediately
+      app.relaunch({
+        args: process.argv.slice(1),
+        execPath: process.execPath
+      });
+      app.exit(0);
+    } else {
+      // In development, spawn the child process synchronously to block the parent,
+      // keeping the concurrently process group alive and piping logs.
+      const { spawnSync } = require('child_process');
+      spawnSync(process.execPath, process.argv.slice(1), {
+        env: process.env,
+        stdio: 'inherit'
+      });
+      app.exit(0);
+    }
+  }
 }
 
 initOpenSSLEnv();

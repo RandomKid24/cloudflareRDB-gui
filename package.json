@@ -1,13 +1,16 @@
 {
   "name": "tunnelgate",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "One-Click RDP via Cloudflare Tunnel",
-  "author": { "name": "TunnelGate", "email": "tunnelgate@example.com" },
+  "author": {
+    "name": "TunnelGate",
+    "email": "tunnelgate@example.com"
+  },
   "homepage": "https://github.com/tunnelgate/app",
   "main": "dist/main/index.js",
   "scripts": {
     "dev:renderer": "vite",
-    "dev:main": "tsc -p tsconfig.main.json && electron .",
+    "dev:main": "tsc -p tsconfig.main.json && electron . 2>nul",
     "dev": "concurrently -k \"npm run dev:renderer\" \"npm run dev:main\"",
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
@@ -16,8 +19,8 @@
     "build": "npm run build:main && npm run build:preload && npm run build:renderer",
     "build:all": "npm run build:native && npm run build",
     "electron:build": "npm run build:all && electron-builder",
-"electron:build:linux": "npm run build:native && npm run build && electron-builder --linux",
-"electron:build:mac": "npm run build:native && npm run build && electron-builder --mac",
+    "electron:build:linux": "npm run build:native && npm run build && electron-builder --linux",
+    "electron:build:mac": "npm run build:native && npm run build && electron-builder --mac",
     "pack": "npm run build:all && electron-builder --win",
     "pack:dir": "npm run build:all && electron-builder --win --dir"
   },

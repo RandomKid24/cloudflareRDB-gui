@@ -1,5 +1,9 @@
 #include "rdp_session.h"
 #include <freerdp/settings.h>
+#ifdef _WIN32
+#include <timeapi.h>
+#pragma comment(lib, "winmm.lib")
+#endif
 #include <freerdp/version.h>
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/input.h>
@@ -20,9 +24,9 @@ static void fileLog(const char* msg) {
     fclose(f);
   }
 #endif
-#endif
   fprintf(stderr, "%s\n", msg);
   fflush(stderr);
+#endif
 }
 
 static DWORD verifyCertificateCallback(freerdp* instance, const char* common_name,
@@ -118,6 +122,25 @@ static int rdp_connect_seh(freerdp* instance) {
   }
 #else
   return (int)freerdp_connect(instance);
+#endif
+}
+
+static void rdp_free_safe(freerdp* instance) {
+  if (!instance) return;
+#ifdef _WIN32
+  __try {
+    if (instance->context) {
+      freerdp_context_free(instance);
+    }
+    freerdp_free(instance);
+  } __except (EXCEPTION_EXECUTE_HANDLER) {
+    fileLog("[RDP] SEH caught during freerdp_context_free/freerdp_free");
+  }
+#else
+  if (instance->context) {
+    freerdp_context_free(instance);
+  }
+  freerdp_free(instance);
 #endif
 }
 
@@ -232,6 +255,31 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
 
+  // Enable GFX pipeline and H264 codecs
+  freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444, TRUE);
+  freerdp_settings_set_bool(settings, FreeRDP_GfxH264, TRUE);
+  freerdp_settings_set_bool(settings, FreeRDP_SupportGraphicsPipeline, TRUE);
+
+  // Detect and set display scaling factor
+#ifdef _WIN32
+  UINT32 dpi = 96;
+  HMODULE hUser32 = GetModuleHandleA("user32.dll");
+  if (hUser32) {
+    typedef UINT(WINAPI* GetDpiForSystemFn)();
+    GetDpiForSystemFn pGetDpiForSystem = (GetDpiForSystemFn)GetProcAddress(hUser32, "GetDpiForSystem");
+    if (pGetDpiForSystem) {
+      dpi = pGetDpiForSystem();
+    }
+  }
+  UINT32 scale = (dpi * 100) / 96;
+  UINT32 freerdpScale = 100;
+  if (scale >= 160) freerdpScale = 180;
+  else if (scale >= 120) freerdpScale = 140;
+  
+  freerdp_settings_set_uint32(settings, FreeRDP_DesktopScaleFactor, freerdpScale);
+  freerdp_settings_set_uint32(settings, FreeRDP_DeviceScaleFactor, freerdpScale);
+#endif
+
   instance_->VerifyCertificate = verifyCertificateCallback;
   instance_->VerifyChangedCertificate = verifyChangedCertificateCallback;
   instance_->PostConnect = postConnectCallback;
@@ -274,7 +322,7 @@ bool RdpSession::connect() {
     fileLog((std::string("[RDP] CAUGHT SEH: ") + sehBuf).c_str());
     lastError_ = sehBuf;
     if (listener_) listener_->onError(lastError_.c_str());
-    // Do NOT call freerdp_context_free / freerdp_free — the heap may be corrupt.
+    rdp_free_safe(instance_);
     instance_ = nullptr;
     context_ = nullptr;
     return false;
@@ -305,6 +353,9 @@ bool RdpSession::connect() {
   fileLog("[RDP] RdpSession::connect: successful connection, starting pump thread");
   connected_ = true;
   running_ = true;
+#ifdef _WIN32
+  timeBeginPeriod(1);
+#endif
 
   updateThread_ = new std::thread(&RdpSession::pump, this);
   fileLog("[RDP] RdpSession::connect exiting with true");
@@ -313,6 +364,7 @@ bool RdpSession::connect() {
 }
 
 void RdpSession::disconnect() {
+  bool wasConnected = connected_;
   running_ = false;
   connected_ = false;
 
@@ -323,13 +375,18 @@ void RdpSession::disconnect() {
   }
 
   if (instance_) {
+    freerdp_disconnect(instance_);
     if (instance_->context)
       gdi_free(instance_);
-    freerdp_disconnect(instance_);
-    freerdp_context_free(instance_);
-    freerdp_free(instance_);
+    rdp_free_safe(instance_);
     instance_ = nullptr;
     context_ = nullptr;
+  }
+
+  if (wasConnected) {
+#ifdef _WIN32
+    timeEndPeriod(1);
+#endif
   }
 }
 
@@ -341,11 +398,13 @@ void RdpSession::pump() {
     DWORD ncount = freerdp_get_event_handles(context_, handles, 64);
     if (ncount == 0) {
       fileLog("[RDP] pump: no event handles");
-#ifdef _WIN32
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
-#endif
       continue;
     }
+
+#ifdef _WIN32
+    WaitForMultipleObjects(ncount, handles, FALSE, 100);
+#endif
 
     if (!freerdp_check_event_handles(context_)) {
 #if defined(FREERDP_VERSION_MAJOR) && (FREERDP_VERSION_MAJOR >= 3)
@@ -385,7 +444,7 @@ void RdpSession::sendPointerEvent(int flags, int x, int y) {
 
 void RdpSession::sendKeyboardEvent(int flags, UINT16 code) {
   if (!connected_ || !context_) return;
-  freerdp_input_send_keyboard_event(context_->input, (UINT16)flags, (UINT8)code);
+  freerdp_input_send_keyboard_event(context_->input, (UINT16)flags, (UINT16)code);
 }
 
 void RdpSession::resize(int width, int height) {
@@ -457,11 +516,14 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
   int bpp = 4;
 
   const BYTE* src = gdi->primary_buffer;
-  std::vector<uint8_t> rgba(w * h * bpp);
+  size_t needed = (size_t)w * h * bpp;
+  if (self->frameBuffer_.size() < needed) {
+    self->frameBuffer_.resize(needed);
+  }
 
   for (int row = 0; row < h; row++) {
     const BYTE* srcRow = src + (y + row) * stride + x * bpp;
-    uint8_t* dstRow = rgba.data() + row * w * bpp;
+    uint8_t* dstRow = self->frameBuffer_.data() + row * w * bpp;
     for (int col = 0; col < w; col++) {
       dstRow[col * 4 + 0] = srcRow[col * 4 + 2];  // R ← B (BGRX→RGBA)
       dstRow[col * 4 + 1] = srcRow[col * 4 + 1];  // G ← G
@@ -472,7 +534,7 @@ BOOL RdpSession::endPaint(rdpContext* ctx) {
 
   try {
     fileLog("[RDP] endPaint calling onBitmapUpdate listener callback");
-    self->listener_->onBitmapUpdate(x, y, w, h, rgba.data(), rgba.size());
+    self->listener_->onBitmapUpdate(x, y, w, h, self->frameBuffer_.data(), needed);
     fileLog("[RDP] endPaint callback successfully sent frame");
   } catch (const std::exception& e) {
     fileLog((std::string("[RDP] endPaint: caught exception: ") + e.what()).c_str());
