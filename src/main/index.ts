@@ -51,11 +51,14 @@ function initOpenSSLEnv() {
     process.env.OPENSSL_CONF = opensslCnfPath;
 
     if (app.isPackaged) {
-      // In production, relaunch and exit immediately
-      app.relaunch({
-        args: process.argv.slice(1),
-        execPath: process.execPath
+      // In production, relaunch and exit immediately using detached spawn
+      const { spawn } = require('child_process');
+      const child = spawn(process.execPath, process.argv.slice(1), {
+        env: process.env,
+        detached: true,
+        stdio: 'ignore'
       });
+      child.unref();
       app.exit(0);
     } else {
       // In development, spawn the child process synchronously to block the parent,
