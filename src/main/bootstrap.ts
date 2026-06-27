@@ -36,11 +36,17 @@ function initOpenSSLEnv() {
       } catch {}
     }
 
-    // Suffix/prefix matching to check if environmental variables are already cached in CRT block
+    // Case-insensitive and normalized path comparison for Windows
+    const pathNormalize = (p: string) => path.normalize(p).toLowerCase();
+    const normConf = process.env.OPENSSL_CONF ? pathNormalize(process.env.OPENSSL_CONF) : '';
+    const normModules = process.env.OPENSSL_MODULES ? pathNormalize(process.env.OPENSSL_MODULES) : '';
+    const normAddonDir = pathNormalize(addonDir);
+    const normPaths = (process.env.PATH || '').split(';').map(p => pathNormalize(p));
+
     const isEnvSet = 
-      process.env.OPENSSL_CONF === opensslCnfPath &&
-      process.env.OPENSSL_MODULES === osslModulesDir &&
-      process.env.PATH?.split(';').includes(addonDir);
+      normConf === pathNormalize(opensslCnfPath) &&
+      normModules === pathNormalize(osslModulesDir) &&
+      normPaths.includes(normAddonDir);
 
     if (!isEnvSet) {
       process.env.PATH = `${addonDir};${process.env.PATH}`;
