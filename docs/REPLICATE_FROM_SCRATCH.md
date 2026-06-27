@@ -111,7 +111,7 @@ C++ endPaint → BGR→RGBA swap → Napi::Buffer::Copy()
 
 ### Platform-Specific Setup
 
-**Windows (PowerShell as Administrator):**
+### Windows (PowerShell as Administrator):
 
 ```powershell
 # 1. Install Visual Studio Build Tools (MSVC compiler)
@@ -136,6 +136,10 @@ npm install
 $env:CMAKE_GENERATOR = "Visual Studio 17 2022"
 npm run build:native
 ```
+
+> **IMPORTANT — Windows DLL strategy:** After building locally and verifying everything works,
+> commit the built DLLs from `native/rdp-addon/build/Release/` into `prebuilt/windows-x64/`.
+> The CI will use these prebuilt DLLs instead of compiling FreeRDP again (see Section 26).
 
 **macOS:**
 
@@ -1275,15 +1279,37 @@ This replaced the old `vswhere`-based detection which broke when:
 
 ### Windows DLL Deployment
 
+> **STRATEGY: Always use `prebuilt/windows-x64/`** instead of CI-compiled FreeRDP DLLs.
+> See Bug 17 — CI-compiled FreeRDP DLLs crash inside `gdi_init_ex` due to build environment
+> differences. The known-working local DLLs are committed to the repo.
+
 ```js
-// FreeRDP DLLs
-['freerdp2.dll', 'freerdp-client2.dll', 'winpr2.dll']
-// OpenSSL DLLs
-['libcrypto-3-x64.dll', 'libssl-3-x64.dll', 'zlib1.dll']
-// Legacy provider (to BOTH locations!)
-legacy.dll → <addonOutDir>/legacy.dll
-legacy.dll → <addonOutDir>/ossl-modules/legacy.dll
-// openssl.cnf
+// build-native.js — simplified DLL copy logic:
+const prebuiltDir = path.resolve(__dirname, '..', 'prebuilt', 'windows-x64');
+const usePrebuilt = fs.existsSync(prebuiltDir) && fs.existsSync(path.join(prebuiltDir, 'freerdp3.dll'));
+const sourceDir = usePrebuilt ? prebuiltDir : vcpkgBinDir;
+
+// Copy all DLLs, ossl-modules/, and openssl.cnf from sourceDir
+// Also mirror to src/native/rdp-addon/build/Release for dev mode
+```
+
+**Files committed in `prebuilt/windows-x64/`:**
+
+```
+freerdp3.dll           # 1,897,984 bytes (Jun 24 local build)
+freerdp-client3.dll
+winpr3.dll
+libcrypto-3-x64.dll
+libssl-3-x64.dll
+legacy.dll             # OpenSSL legacy provider (flat)
+ossl-modules/
+  legacy.dll           # OpenSSL legacy provider (default path)
+msvcp140.dll
+vcruntime140.dll
+vcruntime140_1.dll
+cjson.dll
+z.dll
+openssl.cnf
 ```
 
 ### macOS Dylib Management
@@ -1794,11 +1820,19 @@ Setup:
 
 - **Linux**: `apt-get install freerdp2-dev`
 - **macOS**: Builds FreeRDP from source (brew ships 3.x if 2.x is needed), minimal features, installs to `/usr/local/freerdp2`, sets `FREERDP_ROOT`
-- **Windows**: `vcpkg install freerdp:x64-windows --no-binarycaching --classic`
+- **Windows**:
+  1. `vcpkg install freerdp:x64-windows --no-binarycaching --classic` (for headers + link)
+  2. **Does NOT compile a new FreeRDP DLL.** Instead, `build-native.js` copies from `prebuilt/windows-x64/` — see Bug 17.
+  3. Verifies `prebuilt/windows-x64/freerdp3.dll` exists (CI step fails fast if missing).
 
 Verification: Checks `rdp_addon.node` exists after build. Artifacts: 14-day retention.
 
 Release: GitHub release with tag `v<version>` or `v<version>-build.<run_number>`.
+
+> **IMPORTANT — Updating prebuilt DLLs:** When FreeRDP or OpenSSL needs to be upgraded,
+> build locally on a Windows machine, verify RDP works, then copy the new DLLs from
+> `native/rdp-addon/build/Release/` into `prebuilt/windows-x64/` and commit.
+> Never rely on CI to compile working FreeRDP binaries.
 
 ---
 
@@ -2730,31 +2764,46 @@ await rdpViewManager.connectView(tunnelId, port, config.username, newPassword);
 
 ---
 
-### Bug 14: Debug File Logging — Hardcoded Path in Production
+### Bug 14: Debug File Logging — Now Always-On in Production
 
-**Severity:** Low (only affects development debugging)
+**Severity:** Low (diagnostic aid)
 
-**Symptom:**
-The C++ addon writes debug logs to `C:\Users\Ady\Desktop\cloudflareRDB-gui\addon-debug.log`. This path only exists on the developer's machine.
+**Symptom (original):**
+The C++ addon only wrote logs inside `#if defined(DEBUG) || defined(_DEBUG)`. In production builds (Release mode), `fileLog()` was a no-op, making crash diagnosis impossible.
 
 **Root Cause:**
-`src/native/rdp-addon/rdp_session.cpp`:22-28
+`src/native/rdp-addon/rdp_session.cpp`:14-30 (original)
+
+The `#if defined(DEBUG)` guard prevented any logging in Release mode. When crashes occurred in the packaged app, there was no way to determine if even the addon callbacks were being entered.
+
+**The Fix:**
+Remove the `#if defined(DEBUG)` guard and redirect logs to `%APPDATA%\tunnelgate\addon-debug.log`:
 
 ```cpp
 static void fileLog(const char* msg) {
-  FILE* f = fopen("C:\\Users\\Ady\\Desktop\\cloudflareRDB-gui\\addon-debug.log", "a");
+#ifdef _WIN32
+  std::lock_guard<std::mutex> lock(s_logMutex);
+  const char* appData = getenv("APPDATA");
+  std::string logPath = "addon-debug.log";
+  if (appData) {
+    logPath = std::string(appData) + "\\tunnelgate\\addon-debug.log";
+  }
+  FILE* f = fopen(logPath.c_str(), "a");
   if (f) {
     fprintf(f, "%s\n", msg);
     fclose(f);
   }
+#endif
+  fprintf(stderr, "%s\n", msg);
+  fflush(stderr);
 }
 ```
 
-**Status:** Left as-is for development. Replace with `WLog` or remove `#ifdef DEBUG` before production release.
+Note: If `addon-debug.log` is NOT created at `%APPDATA%\tunnelgate\`, it means the crash happened before any `fileLog()` call executed — i.e., inside FreeRDP's own code (see Bug 17).
 
 **Related Files:**
 
-- `src/native/rdp-addon/rdp_session.cpp`:22-28 — fileLog function with hardcoded path
+- `src/native/rdp-addon/rdp_session.cpp`:14-30 — fileLog function
 
 ---
 
@@ -2824,6 +2873,82 @@ Additionally, `CMakeLists.txt` referenced `napi.h` via an absolute path that ass
 
 ---
 
+### Bug 17: CI-Compiled FreeRDP DLL Crashes Inside `gdi_init_ex`
+
+**Severity:** Critical (packaged build crashes on every RDP connection attempt)
+
+**Symptom:**
+
+- App downloaded from GitHub Releases crashes immediately upon connecting to RDP
+- Local dev build works perfectly
+- FreeRDP log ends at:
+  ```
+  [INFO][com.freerdp.gdi] - [gdi_init_ex]: Local framebuffer format  PIXEL_FORMAT_BGRX32
+  [INFO][com.freerdp.gdi] - [gdi_init_ex]: Remote framebuffer format PIXEL_FORMAT_RGB16
+  ```
+  Then: silence. No `addon-debug.log` is created at all.
+- No C++ callback (`postConnectCallback`, `fileLog`) ever executes
+
+**Root Cause:**
+
+GitHub Actions compiled a fresh `freerdp3.dll` (1,956,864 bytes) from the vcpkg FreeRDP 3.26.0 source. This CI-compiled DLL crashes inside its own `gdi_init_ex` function — before any of our code runs.
+
+The crash is a binary incompatibility caused by differences in the CI build environment (MSVC version, runtime flags, optimization settings) vs the local working build:
+
+| DLL | Size | Build Date | Result |
+|---|---|---|---|
+| `freerdp3.dll` (local) | 1,897,984 bytes | Jun 24 | ✅ Works |
+| `freerdp3.dll` (CI) | 1,956,864 bytes | Jun 27 | ❌ Crashes in gdi_init_ex |
+| `vcruntime140.dll` (local) | 124,272 bytes | Jun 23 | ✅ Works |
+| `vcruntime140.dll` (CI) | 98,360 bytes | Jun 27 | ❌ (Different MSVC runtime!) |
+
+The `rdp_addon.node` (our C++ code) was compiled correctly by CI against the vcpkg headers, but the *runtime FreeRDP DLLs* it loads were broken.
+
+**Why addon-debug.log was never written:**
+The crash happens inside `gdi_init()` called from `postConnectCallback()`, but `gdi_init()` is FreeRDP's own code. The crash occurs *inside FreeRDP's DLL* before execution ever returns to our callback code.
+
+**The Fix:**
+
+1. **Commit known-working DLLs to `prebuilt/windows-x64/`:**
+   ```powershell
+   New-Item -ItemType Directory -Force -Path prebuilt\windows-x64
+   Copy-Item native\rdp-addon\build\Release\*.dll prebuilt\windows-x64\ -Force
+   Copy-Item native\rdp-addon\build\Release\ossl-modules prebuilt\windows-x64\ -Recurse -Force
+   Copy-Item native\rdp-addon\build\Release\openssl.cnf prebuilt\windows-x64\ -Force
+   git add prebuilt/
+   git commit -m "fix: bundle prebuilt Windows FreeRDP DLLs"
+   ```
+
+2. **Update `build-native.js`** to prefer `prebuilt/windows-x64/` over vcpkg:
+   ```js
+   const prebuiltDir = path.resolve(__dirname, '..', 'prebuilt', 'windows-x64');
+   const usePrebuilt = fs.existsSync(prebuiltDir) && fs.existsSync(path.join(prebuiltDir, 'freerdp3.dll'));
+   const sourceDir = usePrebuilt ? prebuiltDir : vcpkgBinDir;
+   // Copy all DLLs from sourceDir
+   ```
+
+3. **Add CI verification step** (fail fast if prebuilt DLLs missing):
+   ```yaml
+   - name: Verify prebuilt Windows DLLs exist
+     if: runner.os == 'Windows'
+     shell: pwsh
+     run: |
+       if (-not (Test-Path "${{ github.workspace }}\prebuilt\windows-x64\freerdp3.dll")) {
+         Write-Host "ERROR: prebuilt/windows-x64/freerdp3.dll not found!"
+         exit 1
+       }
+   ```
+
+**Key diagnostic rule:** If `addon-debug.log` is NOT created at `%APPDATA%\tunnelgate\`, the crash is inside FreeRDP itself (not our code). Check DLL sizes and build dates.
+
+**Related Files:**
+- `prebuilt/windows-x64/` — known-working DLL binaries
+- `scripts/build-native.js` — prebuilt-first DLL copy strategy
+- `.github/workflows/build-and-release.yml` — prebuilt verification step
+- `src/native/rdp-addon/rdp_session.cpp`:14-30 — fileLog now always-on for diagnosis
+
+---
+
 ## 29. File Reference Summary
 
 ### Root
@@ -2839,6 +2964,16 @@ Additionally, `CMakeLists.txt` referenced `napi.h` via an absolute path that ass
 | `electron-builder.yml`                    | Packaging config                      |
 | `.gitignore`                              | Git ignore rules                      |
 | `.github/workflows/build-and-release.yml` | CI/CD pipeline                        |
+
+### Prebuilt Binaries
+
+| Directory/File                         | Purpose                                                                    |
+| -------------------------------------- | -------------------------------------------------------------------------- |
+| `prebuilt/windows-x64/`             | Known-working Windows FreeRDP DLLs — used by CI instead of vcpkg-compiled |
+| `prebuilt/windows-x64/freerdp3.dll` | Core FreeRDP library (local tested build)                                  |
+| `prebuilt/windows-x64/winpr3.dll`   | WinPR companion library                                                    |
+| `prebuilt/windows-x64/ossl-modules/` | OpenSSL legacy provider directory                                          |
+| `prebuilt/windows-x64/openssl.cnf`  | OpenSSL config for legacy + default providers                              |
 
 ### Build
 

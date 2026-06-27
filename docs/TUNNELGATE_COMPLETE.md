@@ -98,6 +98,17 @@ TunnelGate wraps `cloudflared access tcp` into a GUI:
 ├── tsconfig.main.json                         # TS config (main process)
 ├── tsconfig.preload.json                      # TS config (preload)
 │
+├── prebuilt/
+│   └── windows-x64/                          # Known-working Windows DLLs (committed to repo)
+│       ├── freerdp3.dll                       # FreeRDP runtime (local tested build)
+│       ├── winpr3.dll                         # WinPR runtime
+│       ├── libcrypto-3-x64.dll                # OpenSSL crypto
+│       ├── libssl-3-x64.dll                   # OpenSSL SSL
+│       ├── legacy.dll                         # OpenSSL legacy provider (flat)
+│       ├── ossl-modules/legacy.dll            # OpenSSL legacy provider (default path)
+│       ├── msvcp140.dll / vcruntime140*.dll   # MSVC runtimes
+│       └── openssl.cnf                        # OpenSSL config
+│
 ├── scripts/
 │   └── build-native.js                        # C++ addon build script
 │
@@ -111,8 +122,8 @@ TunnelGate wraps `cloudflared access tcp` into a GUI:
 ├── native/
 │   └── rdp-addon/build/Release/
 │       ├── rdp_addon.node                     # Compiled native addon
-│       ├── freerdp2.dll / libfreerdp3.3.dylib # FreeRDP libraries
-│       ├── winpr2.dll / libwinpr3.3.dylib     # WinPR libraries
+│       ├── freerdp3.dll / libfreerdp3.3.dylib # FreeRDP libraries
+│       ├── winpr3.dll / libwinpr3.3.dylib     # WinPR libraries
 │       └── ...                                # Transitive dylibs/DLLs
 │
 ├── src/
@@ -121,6 +132,7 @@ TunnelGate wraps `cloudflared access tcp` into a GUI:
 │   │
 │   ├── main/
 │   │   ├── index.ts                           # App entry, tray, window
+│   │   ├── bootstrap.ts                       # FIRST import in index.ts: sets PATH/env before addon loads
 │   │   ├── ipcHandlers.ts                     # All IPC handler registrations
 │   │   ├── tunnelManager.ts                   # cloudflared process lifecycle
 │   │   ├── rdpViewManager.ts                  # Native addon bridge
@@ -565,9 +577,9 @@ User clicks "Disconnect" or "← Back"
 | **Native RDP client** | `mstsc.exe` | Microsoft Remote Desktop | `xfreerdp` / `remmina` |
 | **Credential injection** | `cmdkey` (Windows Credential Manager) | Skipped | Skipped |
 | **NLA setting** | `NlaSecurity=TRUE`, `TlsSecurity=TRUE` | `NlaSecurity=TRUE` | `NlaSecurity=TRUE` |
-| **FreeRDP source** | vcpkg `freerdp:x64-windows` | Homebrew `freerdp` | `apt install freerdp2-dev` |
+| **FreeRDP source** | `prebuilt/windows-x64/` (committed DLLs) | Homebrew `freerdp` | `apt install freerdp2-dev` |
 | **Build generator** | VS auto-detected (2022/2026) via vcvarsall | Unix Makefiles | Unix Makefiles |
-| **Dylib handling** | Copy DLLs + deps from vcpkg | Copy .dylib, `install_name_tool`, ad-hoc sign | No extra step |
+| **Dylib handling** | Copy from `prebuilt/windows-x64/` | Copy .dylib, `install_name_tool`, ad-hoc sign | No extra step |
 | **cloudflared name** | `cloudflared.exe` | `cloudflared` | `cloudflared` |
 | **Binary search** | `%LOCALAPPDATA%`, `%PROGRAMFILES%` | `/usr/local/bin`, `/opt/homebrew/bin` | `/usr/local/bin`, `/usr/bin` |
 | **File dialog** | `.exe`, `.cmd`, `.bat` | `(any)`, `.sh` | `(any)`, `.sh` |
@@ -685,7 +697,14 @@ Push to `main` branch.
 
 - **Linux**: `apt-get install freerdp2-dev`
 - **macOS**: Builds FreeRDP 2.11.7 from source (brew ships 3.x but addon needs 2.x API), minimal features (no X11/SDL/ALSA/etc.), installs to `/usr/local/freerdp2`, sets `FREERDP_ROOT`
-- **Windows**: vcpkg installs FreeRDP 2.11.2 port, `--no-binarycaching --classic`
+- **Windows**: vcpkg installs FreeRDP for headers/link only. Runtime DLLs come from `prebuilt/windows-x64/` — CI-compiled FreeRDP DLLs crash inside `gdi_init_ex` (see Windows-Specific Issues below).
+
+### Windows-Specific CI Issues
+
+**CI gdi_init_ex crash (RESOLVED):**
+The root cause was binary incompatibility between vcpkg-compiled FreeRDP 3.26.0 DLLs and the MSVC runtime on CI. The fix: commit the known-working local DLLs to `prebuilt/windows-x64/` and have `build-native.js` copy from there. A CI step (`Verify prebuilt Windows DLLs exist`) fails fast if the prebuilt directory is missing.
+
+**Diagnostic:** If `%APPDATA%\tunnelgate\addon-debug.log` is NOT created after installing the app, the crash is inside FreeRDP itself. If it IS created, the crash is in our C++ code.
 
 ### Verification
 

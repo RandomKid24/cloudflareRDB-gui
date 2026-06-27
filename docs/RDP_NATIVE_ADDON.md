@@ -238,9 +238,10 @@ Wrap `createImageData`/`putImageData` in try/catch - can throw on invalid dimens
 - electron-builder signing corrupts Electron Framework on macOS 26
 
 ### Windows
-- FreeRDP 3 from vcpkg or prebuilt DLLs
-- `.node` is a DLL; `LoadLibrary` resolves deps from PATH
-- `install_name_tool` equivalent: edit binary with `SetDllDirectory` or co-locate DLLs
+- FreeRDP 3 from vcpkg (headers for compiling addon) + **prebuilt DLLs from `prebuilt/windows-x64/`**
+- Do NOT rely on CI-compiled FreeRDP DLLs — they crash inside `gdi_init_ex` (see Bug 10)
+- `.node` is a DLL; `LoadLibrary` resolves deps from PATH or co-located DLLs
+- `bootstrap.ts` prepends `addonDir` to `PATH` before `require()`-ing the addon
 - No codesign corruption issue
 
 ### Linux
@@ -262,6 +263,13 @@ Wrap `createImageData`/`putImageData` in try/catch - can throw on invalid dimens
 - `ensureLegacyProvider()` loads legacy + default providers and verifies `EVP_rc4()` is available
 - WinPR RC4 init simulation confirms full RC4 availability before RDP session starts
 - DLLs `legacy.dll` and `ossl-modules/` are deployed alongside `rdp_addon.node`
+
+### Windows Prebuilt DLL Strategy
+- CI-compiled FreeRDP 3.26.0 DLLs crash inside `gdi_init_ex` (see Bug 10)
+- Known-working DLLs are committed to `prebuilt/windows-x64/` in the repo
+- `build-native.js` copies from `prebuilt/windows-x64/` before copying from vcpkg
+- `rdp_addon.node` is still compiled by CI (for ABI compatibility) but runtime DLLs come from repo
+- **Diagnostic:** if `%APPDATA%\tunnelgate\addon-debug.log` is NOT created after an install, the crash is inside FreeRDP's own code (DLL mismatch), not our callbacks
 
 ---
 
@@ -310,6 +318,16 @@ replace Framework from `node_modules` and `codesign --deep` manually.
 **Cause:** The original `detectVsGenerator()` function built the vswhere path using `process.env['ProgramFiles(x86)']` which could return a malformed path, causing fallback to a hardcoded `Visual Studio 17 2022` regardless of what VS was actually installed.
 
 **Fix:** Replaced vswhere-based detection with `detectVs()` which scans known VS installation paths for `vcvarsall.bat`, pairs each path with its correct CMake generator string (e.g., `18` → `Visual Studio 18 2026`, `2022` → `Visual Studio 17 2022`). The `vsSpawn()` function captures the VS environment by running `vcvarsall.bat x64 && set` and passes the merged environment to cmake.
+
+### Bug 10: CI-Compiled FreeRDP DLL Crashes Inside `gdi_init_ex`
+
+**Symptom:** GitHub Actions-built installer crashes on every RDP connection. FreeRDP log ends at `[gdi_init_ex]: Remote framebuffer format PIXEL_FORMAT_RGB16` — then nothing. No `addon-debug.log` is created at `%APPDATA%\tunnelgate\`, meaning no C++ callback code ever executes.
+
+**Cause:** CI compiled a fresh `freerdp3.dll` (1,956,864 bytes) via vcpkg. This binary crashes inside FreeRDP's own `gdi_init_ex` before any of our callbacks run. The local working build used a different `freerdp3.dll` (1,897,984 bytes, Jun 24). Binary incompatibility between CI and local MSVC environments.
+
+**Fix:** Committed the known-working local DLLs to `prebuilt/windows-x64/`. Updated `build-native.js` to always prefer `prebuilt/windows-x64/` over vcpkg binaries. The `rdp_addon.node` is still compiled by CI (correct, needed for Electron ABI), but runtime FreeRDP DLLs come from the repo.
+
+**Diagnostic rule:** `addon-debug.log` not created → crash is inside FreeRDP. `addon-debug.log` created but empty/partial → crash is in our C++ code.
 
 ### Bug 4 (original): Stale Paint Closure
 **Symptom**: (Potential) paint uses old width/height after resize.
