@@ -145,6 +145,7 @@ static void rdp_free_safe(freerdp* instance) {
 }
 
 bool RdpSession::connect() {
+  sspi_GlobalInit();
   instance_ = freerdp_new();
   if (!instance_) {
     lastError_ = "freerdp_new failed";
