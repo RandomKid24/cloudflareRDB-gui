@@ -34,10 +34,9 @@ export class RdpViewManager {
 
   constructor() {
     const fs = require('fs');
-    let addonDir = path.join(__dirname, '..', '..', 'native', 'rdp-addon', 'build', 'Release');
-    if (!fs.existsSync(path.join(addonDir, 'rdp_addon.node'))) {
-      addonDir = path.join(process.resourcesPath, 'native', 'rdp-addon', 'build', 'Release');
-    }
+    const addonDir = app.isPackaged
+      ? path.join(process.resourcesPath, 'rdp-addon')
+      : path.join(__dirname, '..', '..', 'native', 'rdp-addon', 'build', 'Release');
     const addonPath = path.join(addonDir, 'rdp_addon.node');
 
     try {

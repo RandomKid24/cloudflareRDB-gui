@@ -14,9 +14,12 @@ extraResources:
     filter:
       - "cloudflared*"
   - from: native/rdp-addon/build/Release/
-    to: native/rdp-addon/build/Release/
+    to: rdp-addon
     filter:
-      - "**/*"
+      - "*.dll"
+      - "*.node"
+      - "*.cnf"
+      - "ossl-modules/**/*"
 win:
   target:
     - target: nsis
