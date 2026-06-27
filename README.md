@@ -113,8 +113,8 @@ flowchart LR
 |---|---|---|---|
 | **Node.js** | `brew install node` | [Download](https://nodejs.org/) 18+ | `apt install nodejs npm` |
 | **cloudflared** | `brew install cloudflared` | [Download .msi](https://github.com/cloudflare/cloudflared/releases) | `apt install cloudflared` |
-| **FreeRDP 3** | `brew install freerdp` | vcpkg / prebuilt DLLs | `apt install freerdp3-dev` |
-| **Build Tools** | Xcode CLI: `xcode-select --install` | VS 2022 BuildTools + cmake | `build-essential` + cmake |
+| **FreeRDP 3** | `brew install freerdp` | Included via `prebuilt/windows-x64/` (no install needed) | `apt install freerdp3-dev` |
+| **Build Tools** | Xcode CLI: `xcode-select --install` | VS 2022 BuildTools + cmake + vcpkg | `build-essential` + cmake |
 
 ### Install & Run
 
@@ -245,15 +245,32 @@ On Windows, FreeRDP 3 requires the OpenSSL **legacy provider** for RC4 during th
 2. Sets `OPENSSL_MODULES` and `OPENSSL_CONF` environment variables via `_putenv_s` at DLL load time (inside a global `EnvVarInitializer`)
 3. Loads the `legacy` + `default` providers via `OSSL_PROVIDER_load()` before any connection
 
-The legacy DLL (`legacy.dll`) is deployed alongside the addon in the `ossl-modules/` subdirectory during the build step. See [`docs/TUNNELGATE_COMPLETE.md`](docs/TUNNELGATE_COMPLETE.md) for the full deep-dive on the 14 bugs resolved during development.
+The legacy DLL (`legacy.dll`) is deployed alongside the addon in the `ossl-modules/` subdirectory during the build step.
+
+#### Prebuilt Windows DLLs
+
+CI-compiled FreeRDP DLLs crash inside `gdi_init_ex` due to MSVC environment differences. To guarantee a working build, the known-good Windows DLLs are committed to `prebuilt/windows-x64/` in the repo. `build-native.js` copies from there automatically — no manual step required.
+
+> **Updating DLLs:** Build locally on Windows, verify RDP works, then copy `native/rdp-addon/build/Release/*.dll` (and `ossl-modules/`) into `prebuilt/windows-x64/` and commit.
+
+See [`docs/TUNNELGATE_COMPLETE.md`](docs/TUNNELGATE_COMPLETE.md) for the full deep-dive on all 17 bugs resolved during development.
 
 ---
 
 ## 📁 Project Structure
 
 ```
+prebuilt/
+└── windows-x64/           # Known-working Windows FreeRDP DLLs (committed)
+    ├── freerdp3.dll        # Core FreeRDP runtime
+    ├── winpr3.dll
+    ├── libcrypto-3-x64.dll / libssl-3-x64.dll
+    ├── legacy.dll + ossl-modules/legacy.dll   # OpenSSL legacy provider
+    ├── msvcp140.dll / vcruntime140*.dll       # MSVC runtimes
+    └── openssl.cnf
 src/
 ├── main/                  # Electron main process
+│   ├── bootstrap.ts       # FIRST import — sets PATH & env vars before addon loads
 │   ├── ipcHandlers.ts     # IPC channel registration
 │   ├── rdpViewManager.ts  # Addon bridge, lastDimensions map, error interception
 │   ├── tunnelManager.ts   # cloudflared spawn/kill lifecycle
@@ -271,9 +288,9 @@ src/
 │       ├── rdp_session.h / .cpp   # connect, callbacks, frame encoding
 │       └── rdp_module.cpp         # N-API module entry point
 ├── shared/                # Shared TypeScript types & interfaces
-└── scripts/
-    ├── build-native.js    # cmake-js builder, auto-detects VS via vcvarsall, DLL deploy
-    └── generate-icons.ps1 # Icon generation from source PNG
+scripts/
+├── build-native.js    # cmake-js builder, auto-detects VS via vcvarsall, copies prebuilt DLLs
+└── generate-icons.ps1 # Icon generation from source PNG
 ```
 
 ---
@@ -282,9 +299,9 @@ src/
 
 | Doc | Description |
 |---|---|
-| [`docs/RDP_NATIVE_ADDON.md`](docs/RDP_NATIVE_ADDON.md) | Full C++ addon architecture, FreeRDP 3 API usage, GDI rendering pipeline (~15 KB) |
-| [`docs/TUNNELGATE_COMPLETE.md`](docs/TUNNELGATE_COMPLETE.md) | Complete project reference — all components, IPC flow, error codes, credentials (~32 KB) |
-| [`docs/REPLICATE_FROM_SCRATCH.md`](docs/REPLICATE_FROM_SCRATCH.md) | Standalone replication guide — build from zero, all 14 bugs with file:line and before/after (~67 KB) |
+| [`docs/RDP_NATIVE_ADDON.md`](docs/RDP_NATIVE_ADDON.md) | Full C++ addon architecture, FreeRDP 3 API usage, GDI rendering pipeline, 10 bugs |
+| [`docs/TUNNELGATE_COMPLETE.md`](docs/TUNNELGATE_COMPLETE.md) | Complete project reference — all components, IPC flow, error codes, CI/CD |
+| [`docs/REPLICATE_FROM_SCRATCH.md`](docs/REPLICATE_FROM_SCRATCH.md) | Standalone replication guide — build from zero, all 17 bugs with file:line and before/after |
 
 ---
 
