@@ -256,10 +256,10 @@ bool RdpSession::connect() {
   freerdp_settings_set_bool(settings, FreeRDP_RemoteFxCodec, TRUE);
   freerdp_settings_set_bool(settings, FreeRDP_FastPathOutput, TRUE);
 
-  // Enable GFX pipeline and H264 codecs
-  freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444, TRUE);
-  freerdp_settings_set_bool(settings, FreeRDP_GfxH264, TRUE);
-  freerdp_settings_set_bool(settings, FreeRDP_SupportGraphicsPipeline, TRUE);
+  // Disable GFX pipeline and H264 codecs to prevent crashes in GDI mode on Windows
+  freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444, FALSE);
+  freerdp_settings_set_bool(settings, FreeRDP_GfxH264, FALSE);
+  freerdp_settings_set_bool(settings, FreeRDP_SupportGraphicsPipeline, FALSE);
 
   // Detect and set display scaling factor
 #ifdef _WIN32
