@@ -15,10 +15,14 @@
 static std::mutex s_logMutex;
 
 static void fileLog(const char* msg) {
-#if defined(DEBUG) || defined(_DEBUG)
 #ifdef _WIN32
   std::lock_guard<std::mutex> lock(s_logMutex);
-  FILE* f = fopen("addon-debug.log", "a");
+  const char* appData = getenv("APPDATA");
+  std::string logPath = "addon-debug.log";
+  if (appData) {
+    logPath = std::string(appData) + "\\tunnelgate\\addon-debug.log";
+  }
+  FILE* f = fopen(logPath.c_str(), "a");
   if (f) {
     fprintf(f, "%s\n", msg);
     fclose(f);
@@ -26,7 +30,6 @@ static void fileLog(const char* msg) {
 #endif
   fprintf(stderr, "%s\n", msg);
   fflush(stderr);
-#endif
 }
 
 static DWORD verifyCertificateCallback(freerdp* instance, const char* common_name,
