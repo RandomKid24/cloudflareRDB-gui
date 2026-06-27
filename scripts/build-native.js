@@ -234,95 +234,45 @@ console.log(`Copied ${addonName} to ${addonOutDir}`);
 
 // FreeRDP shared libraries — copy alongside the addon
 if (isWin) {
+  // === STRATEGY: Always prefer prebuilt/windows-x64/ DLLs from the repo ===
+  // These are the known-working binaries. CI-compiled FreeRDP DLLs have caused
+  // crashes inside gdi_init_ex due to build environment differences.
+  const prebuiltDir = path.resolve(__dirname, '..', 'prebuilt', 'windows-x64');
   const freerdpRoot = process.env.FREERDP_ROOT || path.join(
     process.env.VCPKG_ROOT || process.env.VCPKG_INSTALLATION_ROOT || 'C:\\vcpkg',
     'installed', 'x64-windows'
   );
-  const binDir = path.join(freerdpRoot, 'bin');
-  const dllVariants = [
-    ['freerdp3.dll', 'freerdp2.dll', 'freerdp.dll'],
-    ['freerdp-client3.dll', 'freerdp-client2.dll', 'freerdp-client.dll'],
-    ['winpr3.dll', 'winpr2.dll', 'winpr.dll'],
-    ['z.dll'],
-    ['cjson.dll'],
-  ];
-  for (const variants of dllVariants) {
-    const found = variants.find(dll => fs.existsSync(path.join(binDir, dll)));
-    if (found) {
-      fs.copyFileSync(path.join(binDir, found), path.join(addonOutDir, found));
-      console.log(`  Copied ${found}`);
-    } else {
-      console.warn(`  Warning: none of [${variants.join(', ')}] found in ${binDir}`);
-    }
-  }
-  const deps = ['libcrypto-3-x64.dll', 'libssl-3-x64.dll', 'zlib1.dll'];
-  for (const dll of deps) {
-    const p = path.join(binDir, dll);
-    if (fs.existsSync(p)) {
-      fs.copyFileSync(p, path.join(addonOutDir, dll));
-      console.log(`  Copied dependency ${dll}`);
-    }
+  const vcpkgBinDir = path.join(freerdpRoot, 'bin');
+
+  const usePrebuilt = fs.existsSync(prebuiltDir) && fs.existsSync(path.join(prebuiltDir, 'freerdp3.dll'));
+  if (usePrebuilt) {
+    console.log(`Using prebuilt DLLs from ${prebuiltDir}`);
+  } else {
+    console.warn(`WARNING: prebuilt/windows-x64/freerdp3.dll not found, falling back to vcpkg binaries`);
   }
 
-  // Copy VC++ runtime DLLs (msvcp140, vcruntime140, vcruntime140_1)
-  // These are needed for the addon and FreeRDP DLLs on systems without Visual Studio.
-  const vcDlls = ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'];
-  const vswherePaths = [
-    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe'),
-    path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe'),
-    'vswhere',
-  ];
-  let vswhereResult = null;
-  for (const vsp of vswherePaths) {
-    const r = spawnSync(vsp, ['-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-property', 'installationPath'], { encoding: 'utf8' });
-    if (r.status === 0 && r.stdout) { vswhereResult = r; break; }
-  }
-  if (vswhereResult) {
-    const vsPath = vswhereResult.stdout.trim().split('\n')[0];
-    const msvcRoot = path.join(vsPath, 'VC', 'Tools', 'MSVC');
-    if (fs.existsSync(msvcRoot)) {
-      const msvcVersions = fs.readdirSync(msvcRoot).filter(d => /^14\./.test(d));
-      for (const ver of msvcVersions) {
-        const binDir2 = path.join(msvcRoot, ver, 'bin', 'Hostx64', 'x64');
-        if (fs.existsSync(binDir2)) {
-          for (const dll of vcDlls) {
-            const p = path.join(binDir2, dll);
-            if (fs.existsSync(p)) {
-              fs.copyFileSync(p, path.join(addonOutDir, dll));
-              console.log(`  Copied VC runtime ${dll}`);
-            }
-          }
-          break;
-        }
-      }
-    }
-  }
-  // OpenSSL 3.x loads providers from <dll_dir>/ossl-modules/ by default,
-  // but we also set OPENSSL_MODULES=addonDir at runtime, so copy to both locations.
+  // Copy all DLLs and ossl-modules from prebuilt or vcpkg
+  const sourceDir = usePrebuilt ? prebuiltDir : vcpkgBinDir;
   const osslModulesDir = path.join(addonOutDir, 'ossl-modules');
   fs.mkdirSync(osslModulesDir, { recursive: true });
-  const legacyPaths = [
-    path.join(binDir, 'ossl-modules', 'legacy.dll'),
-    path.join(freerdpRoot, 'lib', 'ossl-modules', 'legacy.dll'),
-    path.join(binDir, 'legacy.dll'),
-  ];
-  let legacyCopied = false;
-  for (const lp of legacyPaths) {
-    if (fs.existsSync(lp)) {
-      // Copy to flat dir (for OPENSSL_MODULES=addonDir at runtime)
-      fs.copyFileSync(lp, path.join(addonOutDir, 'legacy.dll'));
-      // Also copy to ossl-modules/ subdirectory (default OpenSSL 3.x provider path)
-      fs.copyFileSync(lp, path.join(osslModulesDir, 'legacy.dll'));
-      console.log(`  Copied legacy provider ${lp} -> legacy.dll + ossl-modules/legacy.dll`);
-      legacyCopied = true;
-      break;
-    }
-  }
-  if (!legacyCopied) {
-    console.warn('  WARNING: legacy.dll not found — NTLM/NLA will fail on NTLM-only servers!');
+
+  const dlls = fs.readdirSync(sourceDir).filter(f => f.endsWith('.dll'));
+  for (const dll of dlls) {
+    fs.copyFileSync(path.join(sourceDir, dll), path.join(addonOutDir, dll));
+    console.log(`  Copied ${dll}`);
   }
 
-  // Write OpenSSL config to auto-load the legacy provider (needed for RC4 during RDP licensing)
+  // Copy ossl-modules subdir if present
+  const osslSrc = path.join(sourceDir, 'ossl-modules');
+  if (fs.existsSync(osslSrc)) {
+    for (const f of fs.readdirSync(osslSrc)) {
+      fs.copyFileSync(path.join(osslSrc, f), path.join(osslModulesDir, f));
+      console.log(`  Copied ossl-modules/${f}`);
+    }
+  }
+
+  // Copy openssl.cnf if it exists in prebuilt (or regenerate it)
+  const prebuiltCnf = path.join(prebuiltDir, 'openssl.cnf');
   const opensslCnf = [
     'openssl_conf = openssl_init',
     '',
@@ -340,23 +290,29 @@ if (isWin) {
     'activate = 1',
     '',
   ].join('\n');
-  fs.writeFileSync(path.join(addonOutDir, 'openssl.cnf'), opensslCnf, 'utf-8');
-  console.log('  Wrote openssl.cnf');
-
-  // Copy all FreeRDP DLLs from vcpkg to the build output directories (both src/native and native)
-  const vcpkgRoot = process.env.VCPKG_INSTALLATION_ROOT || 'C:\\vcpkg';
-  const vcpkgBin = path.join(vcpkgRoot, 'installed', 'x64-windows', 'bin');
-  if (fs.existsSync(vcpkgBin)) {
-    const outDir = path.join(__dirname, '..', 'src', 'native', 'rdp-addon', 'build', 'Release');
-    fs.mkdirSync(outDir, { recursive: true });
-    fs.mkdirSync(addonOutDir, { recursive: true });
-    const dlls = fs.readdirSync(vcpkgBin).filter(f => f.endsWith('.dll'));
-    for (const dll of dlls) {
-      fs.copyFileSync(path.join(vcpkgBin, dll), path.join(outDir, dll));
-      fs.copyFileSync(path.join(vcpkgBin, dll), path.join(addonOutDir, dll));
-    }
-    console.log(`Copied ${dlls.length} FreeRDP DLLs to build output directories`);
+  if (usePrebuilt && fs.existsSync(prebuiltCnf)) {
+    fs.copyFileSync(prebuiltCnf, path.join(addonOutDir, 'openssl.cnf'));
+    console.log('  Copied openssl.cnf from prebuilt');
+  } else {
+    fs.writeFileSync(path.join(addonOutDir, 'openssl.cnf'), opensslCnf, 'utf-8');
+    console.log('  Wrote openssl.cnf');
   }
+
+  // Also mirror output into src/native/rdp-addon/build/Release for dev mode
+  const outDir = path.join(__dirname, '..', 'src', 'native', 'rdp-addon', 'build', 'Release');
+  fs.mkdirSync(outDir, { recursive: true });
+  for (const dll of dlls) {
+    fs.copyFileSync(path.join(addonOutDir, dll), path.join(outDir, dll));
+  }
+  const osslDest = path.join(outDir, 'ossl-modules');
+  fs.mkdirSync(osslDest, { recursive: true });
+  if (fs.existsSync(osslSrc)) {
+    for (const f of fs.readdirSync(osslSrc)) {
+      fs.copyFileSync(path.join(osslSrc, f), path.join(osslDest, f));
+    }
+  }
+  fs.copyFileSync(path.join(addonOutDir, 'openssl.cnf'), path.join(outDir, 'openssl.cnf'));
+  console.log(`Mirrored DLLs to dev src build dir: ${outDir}`);
 }
 
 if (isMac) {
